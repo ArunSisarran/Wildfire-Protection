@@ -67,6 +67,73 @@ export class ApiClient {
   async hello(name: string = 'world'): Promise<ApiResponse<{ message: string }>> {
     return this.get(`/api/hello?name=${encodeURIComponent(name)}`);
   }
+
+  // LLM Chat endpoints
+  async chat(data: {
+    message: string;
+    session_id?: string;
+    location?: {
+      latitude: number;
+      longitude: number;
+      name?: string;
+    };
+  }): Promise<ApiResponse<{
+    response: string;
+    session_id: string;
+    location_used: {
+      latitude: number;
+      longitude: number;
+      name: string;
+    };
+    fire_risk_data?: unknown;
+    sources: string[];
+  }>> {
+    return this.post('/api/llm/chat', data);
+  }
+
+  async getChatHistory(sessionId: string): Promise<ApiResponse<{
+    session_id: string;
+    messages: Array<{
+      role: string;
+      content: string;
+      timestamp: string;
+    }>;
+  }>> {
+    return this.get(`/api/llm/sessions/${sessionId}/history`);
+  }
+
+  async clearChatSession(sessionId: string): Promise<ApiResponse<{
+    message: string;
+  }>> {
+    return this.request(`/api/llm/sessions/${sessionId}`, { method: 'DELETE' });
+  }
+
+  async getDefaultLocation(): Promise<ApiResponse<{
+    location: {
+      latitude: number;
+      longitude: number;
+      name: string;
+    };
+    fire_risk_assessment: unknown;
+  }>> {
+    return this.get('/api/llm/location/default');
+  }
+
+  async getLocationRiskAssessment(location: {
+    latitude: number;
+    longitude: number;
+    name?: string;
+  }): Promise<ApiResponse<{
+    location: {
+      latitude: number;
+      longitude: number;
+      name?: string;
+    };
+    fire_risk_assessment: unknown;
+    timestamp: string;
+  }>> {
+    return this.post('/api/llm/location/risk-assessment', location);
+  }
 }
 
 export const apiClient = new ApiClient();
