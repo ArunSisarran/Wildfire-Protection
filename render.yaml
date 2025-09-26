@@ -5,7 +5,8 @@ services:
     region: oregon
     plan: free
     autoDeploy: true
-    dockerfilePath: ./backend/Dockerfile
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /health
     envVars:
       - key: PYTHONUNBUFFERED
