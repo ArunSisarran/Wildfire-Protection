@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
 from datetime import datetime
 import logging
+import os
 
 from fems_endpoints import FEMSFireRiskAPI
 
@@ -84,6 +85,9 @@ class FireRiskAssessment(BaseModel):
 
 class GraphQLQuery(BaseModel):
     query: str = Field(..., description="GraphQL query string")
+
+# Get frontend URL from environment or use default
+frontend_url = os.getenv("FRONTEND_URL", "https://frontend-l4dndu693-zhuolin-lis-projects.vercel.app")
 
 
 @app.get("/")
