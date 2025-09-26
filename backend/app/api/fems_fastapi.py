@@ -6,7 +6,7 @@ from datetime import datetime
 import logging
 import os
 
-from fems_endpoints import FEMSFireRiskAPI
+from .fems_endpoints import FEMSFireRiskAPI
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
