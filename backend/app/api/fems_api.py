@@ -188,115 +188,161 @@ class FEMSFireRiskAPI:
         """
         return self.query_graphql(query)
 
+    def calculate_fire_risk_score(self, nfdrs_data: Dict, weather_data: Dict) -> float:
+        score = 0
+        weights = {
+            'burning_index': 0.25,
+            'ignition_component': 0.20,
+            'spread_component': 0.15,
+            'kbdi': 0.10,
+            'fuel_moisture': 0.15,
+            'wind_speed': 0.10,
+            'relative_humidity': 0.05
+        }
+        
+        bi = min(nfdrs_data.get('burning_index', 0) / 2, 100)
+        score += bi * weights['burning_index']
+        
+        ic = nfdrs_data.get('ignition_component', 0)
+        score += ic * weights['ignition_component']
+        
+        sc = min(nfdrs_data.get('spread_component', 0), 100)
+        score += sc * weights['spread_component']
+        
+        kbdi = nfdrs_data.get('kbdi', 0) / 8
+        score += kbdi * weights['kbdi']
+        
+        fuel_1hr = nfdrs_data.get('one_hr_tl_fuel_moisture', 30)
+        fuel_risk = max(0, 100 - (fuel_1hr * 3.33))
+        score += fuel_risk * weights['fuel_moisture']
+        
+        wind = weather_data.get('wind_speed', 0)
+        wind_risk = min(wind * 3, 100)
+        score += wind_risk * weights['wind_speed']
+        
+        rh = weather_data.get('relative_humidity', 50)
+        rh_risk = max(0, 100 - rh)
+        score += rh_risk * weights['relative_humidity']
+        
+        return round(score, 2)
+
 def main():
-    
-    print("\n" + "=" * 80)
-    print(" " * 20 + "FEMS FIRE RISK API - NEW YORK DATA")
-    print("=" * 80)
-    print(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Endpoint: https://fems.fs2c.usda.gov/api/climatology/graphql")
-    print("=" * 80)
+    print("=" * 60)
+    print("FEMS Fire Risk Assessment - New York State")
+    print("=" * 60)
     
     api = FEMSFireRiskAPI()
     
     try:
-        print("\nSTATION METADATA QUERY")
-        print("-" * 60)
-        print("Fetching New York RAWS stations with NFDRS data...")
-        
+        print("\n1. Fetching New York weather stations...")
         stations_response = api.get_ny_stations()
-        stations = stations_response.get('data', {}).get('stationMetaData', {}).get('data', [])
-        total = stations_response.get('data', {}).get('stationMetaData', {}).get('_metadata', {}).get('total_count', 0)
+        stations = stations_response['data']['stationMetaData']['data']
         
-        print(f"Found {total} stations in New York\n")
+        if not stations:
+            print("No stations found in New York")
+            return
         
-        print("Station Details (first 3):")
-        print("-" * 40)
-        for i, station in enumerate(stations[:3], 1):
-            print(f"\n{i}. {station.get('station_name', 'Unknown')}")
-            print(f"   ID: {station.get('station_id')}")
-            print(f"   Location: {station.get('latitude')}°N, {station.get('longitude')}°W")
-            print(f"   Elevation: {station.get('elevation')} ft")
-            print(f"   Status: {station.get('station_status')}")
-            print(f"   Type: {station.get('station_type')}")
+        print(f"   Found {len(stations)} stations in New York")
         
-        active_stations = [s for s in stations if s.get('station_status') == 'A'][:3]
-        if not active_stations:
-            active_stations = stations[:3]
+        active_stations = [s for s in stations if s.get('station_status') == 'A'][:5]
         station_ids = ','.join(str(s['station_id']) for s in active_stations)
         
-        print(f"\n→ Using Station IDs for remaining queries: {station_ids}")
+        print(f"\n   Using stations: {station_ids}")
+        for station in active_stations:
+            print(f"     - {station['station_name']} ({station['station_id']})")
+            print(f"       Lat: {station['latitude']}, Lon: {station['longitude']}")
         
-        print("\n" + "=" * 80)
-        print("\n WEATHER OBSERVATIONS QUERY")
-        print("-" * 60)
-        print("Fetching weather data from last 24 hours...")
+        print("\n2. Fetching current weather conditions...")
+        weather_response = api.get_weather_observations(station_ids)
+        weather_data = weather_response['data']['weatherObs']['data']
         
-        weather_response = api.get_weather_observations(station_ids, hours_back=24)
-        weather_data = weather_response.get('data', {}).get('weatherObs', {}).get('data', [])
-        weather_count = weather_response.get('data', {}).get('weatherObs', {}).get('_metadata', {}).get('total_count', 0)
+        print("\n3. Fetching fire danger indices...")
+        nfdrs_response = api.get_nfdrs_observations(station_ids)
+        nfdrs_data = nfdrs_response['data']['nfdrsObs']['data']
         
-        print(f"Retrieved {weather_count} weather observations\n")
+        print("\n" + "=" * 60)
+        print("FIRE RISK ANALYSIS RESULTS")
+        print("=" * 60)
         
-        if weather_data:
-            print("Current Weather Conditions:")
-            print("-" * 40)
-            for obs in weather_data[:5]:  # Show first 5
-                print(f"\n• Station: {obs.get('station_name', 'Unknown')} (ID: {obs.get('station_id')})")
-                print(f"  Time: {obs.get('observation_time')}")
-                print(f"  Temperature: {obs.get('temperature')}°F")
-                print(f"  Humidity: {obs.get('relative_humidity')}%")
-                print(f"  Wind: {obs.get('wind_speed')} mph from {obs.get('wind_direction')}°")
-                print(f"  Gust: {obs.get('peak_gust_speed')} mph")
-                print(f"  Rain (24hr): {obs.get('hr24Precipitation')} in")
-        else:
-            print("No weather data available")
+        risk_assessments = []
         
-        print("\n" + "=" * 80)
-        print("\nNFDRS FIRE DANGER OBSERVATIONS QUERY")
-        print("-" * 60)
-        print("Fetching fire danger indices from last 7 days...")
-        
-        nfdrs_response = api.get_nfdrs_observations(station_ids, days_back=7)
-        nfdrs_data = nfdrs_response.get('data', {}).get('nfdrsObs', {}).get('data', [])
-        nfdrs_count = nfdrs_response.get('data', {}).get('nfdrsObs', {}).get('_metadata', {}).get('total_count', 0)
-        
-        print(f"Retrieved {nfdrs_count} NFDRS observations\n")
-        
-        if nfdrs_data:
-            print("Fire Danger Indices (most recent per station):")
+        for station in active_stations:
+            station_id = station['station_id']
+            
+            station_weather = next((w for w in weather_data if w['station_id'] == station_id), {})
+            station_nfdrs = next((n for n in nfdrs_data if n['station_id'] == station_id), {})
+            
+            if not station_nfdrs:
+                continue
+            
+            print(f"\nStation: {station['station_name']}")
+            print(f"Location: {station['latitude']}, {station['longitude']}")
             print("-" * 40)
             
-            seen = set()
-            for obs in nfdrs_data:
-                if obs['station_id'] not in seen:
-                    print(f"\n• Station ID: {obs.get('station_id')}")
-                    print(f"  Date: {obs.get('nfdr_date')} at {obs.get('nfdr_time')}:00")
-                    print(f"  Fuel Model: {obs.get('fuel_model')}")
-                    print(f"  \n  Fire Indices:")
-                    print(f"    - Burning Index: {obs.get('burning_index')}")
-                    print(f"    - Ignition Component: {obs.get('ignition_component')}")
-                    print(f"    - Spread Component: {obs.get('spread_component')}")
-                    print(f"    - Energy Release: {obs.get('energy_release_component')}")
-                    print(f"    - KBDI (Drought): {obs.get('kbdi')}")
-                    print(f"  \n  Fuel Moisture:")
-                    print(f"    - 1-hr: {obs.get('one_hr_tl_fuel_moisture')}%")
-                    print(f"    - 10-hr: {obs.get('ten_hr_tl_fuel_moisture')}%")
-                    print(f"    - 100-hr: {obs.get('hun_hr_tl_fuel_moisture')}%")
-                    print(f"    - 1000-hr: {obs.get('thou_hr_tl_fuel_moisture')}%")
-                    
-                    seen.add(obs['station_id'])
-                    if len(seen) >= 2:
-                        break
+            risk_score = api.calculate_fire_risk_score(station_nfdrs, station_weather)
+            
+            if risk_score < 20:
+                risk_level = "LOW"
+            elif risk_score < 40:
+                risk_level = "MODERATE"
+            elif risk_score < 60:
+                risk_level = "HIGH"
+            elif risk_score < 80:
+                risk_level = "VERY HIGH"
+            else:
+                risk_level = "EXTREME"
+            
+            print(f"\n🔥 FIRE RISK SCORE: {risk_score}/100 - {risk_level}")
+            
+            print(f"\nFire Danger Indices:")
+            print(f"  • Burning Index: {station_nfdrs.get('burning_index', 'N/A')}")
+            print(f"  • Ignition Component: {station_nfdrs.get('ignition_component', 'N/A')}%")
+            print(f"  • Spread Component: {station_nfdrs.get('spread_component', 'N/A')}")
+            print(f"  • Energy Release Component: {station_nfdrs.get('energy_release_component', 'N/A')}")
+            print(f"  • KBDI (Drought Index): {station_nfdrs.get('kbdi', 'N/A')}")
+            
+            print(f"\nFuel Moisture Content:")
+            print(f"  • 1-hour fuels: {station_nfdrs.get('one_hr_tl_fuel_moisture', 'N/A')}%")
+            print(f"  • 10-hour fuels: {station_nfdrs.get('ten_hr_tl_fuel_moisture', 'N/A')}%")
+            print(f"  • 100-hour fuels: {station_nfdrs.get('hun_hr_tl_fuel_moisture', 'N/A')}%")
+            print(f"  • 1000-hour fuels: {station_nfdrs.get('thou_hr_tl_fuel_moisture', 'N/A')}%")
+            
+            if station_weather:
+                print(f"\nWeather Conditions:")
+                print(f"  • Temperature: {station_weather.get('temperature', 'N/A')}°F")
+                print(f"  • Relative Humidity: {station_weather.get('relative_humidity', 'N/A')}%")
+                print(f"  • 24hr Precipitation: {station_weather.get('hr24Precipitation', 'N/A')} inches")
+                
+            risk_assessments.append({
+                'station': station['station_name'],
+                'risk_score': risk_score,
+                'risk_level': risk_level,
+                'lat': station['latitude'],
+                'lon': station['longitude']
+            })
+        
+        print("\n" + "=" * 60)
+        print("RISK SUMMARY - HIGH RISK AREAS")
+        print("=" * 60)
+        
+        high_risk = [r for r in risk_assessments if r['risk_score'] >= 40]
+        if high_risk:
+            high_risk.sort(key=lambda x: x['risk_score'], reverse=True)
+            print("\n⚠️  HIGH FIRE RISK LOCATIONS:")
+            for area in high_risk:
+                print(f"  • {area['station']}: {area['risk_level']} (Score: {area['risk_score']})")
+                print(f"    Location: {area['lat']}, {area['lon']}")
         else:
-            print("No NFDRS data available")
+            print("\n✓ No high-risk areas detected at this time")
+        
+        print("\n" + "=" * 60)
+        print("Assessment complete. Monitor high-risk areas closely.")
+        print("=" * 60)
         
     except Exception as e:
-        print(f"\nError: {str(e)}")
-        print("\nTroubleshooting:")
-        print("  • Check internet connection")
-        print("  • Verify API is accessible")
-        print("  • Some stations may not have recent data")
+        print(f"\n❌ Error: {e}")
+        print("\nNote: This is a proof of concept. Some stations may not have recent data.")
 
 if __name__ == "__main__":
     main()
+
