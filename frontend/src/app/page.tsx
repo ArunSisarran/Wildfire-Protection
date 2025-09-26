@@ -21,7 +21,7 @@ export default function Home() {
         setApiStatus('❌ Backend connection failed');
         setApiMessage(healthResponse.error || 'Unknown error');
       }
-    } catch (error) {
+    } catch {
       setApiStatus('❌ Network error');
       setApiMessage('Cannot reach backend API');
     }
