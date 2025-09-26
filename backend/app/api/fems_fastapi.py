@@ -7,13 +7,14 @@ import logging
 import os
 
 from .fems_endpoints import FEMSFireRiskAPI
+from .llm_endpoint import router as llm_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="FEMS Fire Risk Assessment API",
-    description="FastAPI wrapper for FEMS Fire Risk Assessment functions",
+    description="FastAPI wrapper for FEMS Fire Risk Assessment functions with LLM integration",
     version="1.0.0"
 )
 
@@ -24,6 +25,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include LLM router
+app.include_router(llm_router)
 
 fems_api = FEMSFireRiskAPI()
 
@@ -359,6 +363,20 @@ async def health_check():
             "status": "unhealthy",
             "fems_api": "disconnected",
             "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+@app.get("/test-llm")
+async def test_llm_simple():
+    """Simple test endpoint for LLM functionality"""
+    try:
+        from .llm_endpoint import simple_llm_test
+        result = simple_llm_test()
+        return result
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error testing LLM: {str(e)}",
             "timestamp": datetime.utcnow().isoformat()
         }
 
