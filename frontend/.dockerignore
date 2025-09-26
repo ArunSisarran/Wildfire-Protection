@@ -1,0 +1,15 @@
+node_modules
+.next
+.next-cache
+.turbo
+.git
+.gitignore
+Dockerfile
+.dockerignore
+npm-debug.log*
+yarn-error.log*
+*.local
+*.log
+README.md
+
+
