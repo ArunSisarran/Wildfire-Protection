@@ -1,0 +1,11 @@
+{
+  "name": "wildfire-protection",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "cd frontend && npm run build",
+    "start": "cd frontend && npm run start",
+    "dev": "cd frontend && npm run dev"
+  },
+  "workspaces": ["frontend"]
+}
