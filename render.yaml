@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: wildfire-protection-backend
+    env: docker
+    region: oregon
+    plan: free
+    autoDeploy: true
+    dockerfilePath: backend/Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+    # If you need secrets, add them here or via the dashboard
+    # - key: OPENAI_API_KEY
+    #   sync: false
+
+
