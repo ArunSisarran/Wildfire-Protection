@@ -25,60 +25,78 @@ class FireRiskAPI {
     }
   }
 
-async calculatePlume(fireLocation: FireLocation, hours: number[] = [1, 2, 4]): Promise<PlumeData> {
-  try {
-    const response = await axios.post(`${this.plumeURL}${PLUME_ENDPOINTS.plume}`, {
-      lat: fireLocation.coordinates.lat,
-      lon: fireLocation.coordinates.lng,
-      hours: hours,
-      area_m2: fireLocation.area_m2 || 10000,
-      emission_multiplier: 1.5,
-      diffusion_multiplier: 1.2,
-      suppress_small_fires: false
-    });
-    return response.data;
-  } catch (error) {
-    console.error('Plume calculation error:', error);
-    return this.getMockPlume(fireLocation, hours);
+  async calculatePlume(fireLocation: FireLocation, hours: number[] = [1, 2, 4]): Promise<PlumeData> {
+    try {
+      const response = await axios.post(`${this.plumeURL}${PLUME_ENDPOINTS.plume}`, {
+        lat: fireLocation.coordinates.lat,
+        lon: fireLocation.coordinates.lng,
+        hours: hours,
+        area_m2: fireLocation.area_m2 || 10000,
+        emission_multiplier: 1.5,
+        diffusion_multiplier: 1.2,
+        suppress_small_fires: false
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Plume calculation error:', error);
+      return this.getMockPlume(fireLocation, hours);
+    }
   }
-}
 
-async calculateDynamicPlume(fireLocation: FireLocation, maxHours: number = 6): Promise<PlumeData> {
-  try {
-    const response = await axios.post(`${this.plumeURL}${PLUME_ENDPOINTS.plumeDynamic}`, {
-      lat: fireLocation.coordinates.lat,
-      lon: fireLocation.coordinates.lng,
-      hours: Array.from({ length: maxHours }, (_, i) => i + 1),
-      area_m2: fireLocation.area_m2 || 10000,
-      step_minutes: 30,
-      simulation_mode: 'cumulative_union',
-      emission_multiplier: 1.5,
-      diffusion_multiplier: 1.2
-    });
-    return response.data;
-  } catch (error) {
-    console.error('Dynamic plume error:', error);
-    return this.getMockPlume(fireLocation, [1, 2, 3, 4, 5, 6]);
+  async calculateDynamicPlume(fireLocation: FireLocation, maxHours: number = 6): Promise<PlumeData> {
+    try {
+      const response = await axios.post(`${this.plumeURL}${PLUME_ENDPOINTS.plumeDynamic}`, {
+        lat: fireLocation.coordinates.lat,
+        lon: fireLocation.coordinates.lng,
+        hours: Array.from({ length: maxHours }, (_, i) => i + 1),
+        area_m2: fireLocation.area_m2 || 10000,
+        step_minutes: 30,
+        simulation_mode: 'cumulative_union',
+        emission_multiplier: 1.5,
+        diffusion_multiplier: 1.2
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Dynamic plume error:', error);
+      return this.getMockPlume(fireLocation, [1, 2, 3, 4, 5, 6]);
+    }
   }
-}
 
-async sendChatMessage(message: string, sessionId: string, location?: any): Promise<any> {
-  try {
-    const response = await axios.post(`${this.geminiURL}${GEMINI_ENDPOINTS.chat}`, {
-      message,
-      session_id: sessionId,
-      location: location || { latitude: 42.7, longitude: -75.8 }
-    });
-    return response.data;
-  } catch (error) {
-    console.error('Chat error:', error);
-    return {
-      response: "I'm currently unable to connect to the server. Please try again later.",
-      session_id: sessionId,
-      fire_risk_data: null
-    };
+  async sendChatMessage(message: string, sessionId: string, location?: any): Promise<any> {
+    try {
+      const response = await axios.post(`${this.geminiURL}${GEMINI_ENDPOINTS.chat}`, {
+        message,
+        session_id: sessionId,
+        location: location || { latitude: 42.7, longitude: -75.8 }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Chat error:', error);
+      return {
+        response: "I'm currently unable to connect to the server. Please try again later.",
+        session_id: sessionId,
+        fire_risk_data: null
+      };
+    }
   }
-}
+
+  // --- NEW FUNCTION ADDED HERE ---
+  async getPlumeForStation(stationId: number): Promise<PlumeData> {
+    try {
+      // Calls the new FastAPI endpoint for generating a plume from a station
+      const response = await axios.get(`${this.baseURL}/api/stations/${stationId}/plume`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching plume for station ${stationId}:`, error);
+      // Fallback to mock data on error, consistent with other methods
+      const mockFireLocation: FireLocation = {
+        id: `station-${stationId}`,
+        coordinates: { lat: NY_CONFIG.center.lat, lng: NY_CONFIG.center.lng },
+        timestamp: new Date().toISOString()
+      };
+      return this.getMockPlume(mockFireLocation, [1, 3, 6]);
+    }
+  }
 
   private getMockAssessment(): FireRiskAssessment {
     const stations = this.getMockStations();
