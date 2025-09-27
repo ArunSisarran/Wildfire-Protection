@@ -38,6 +38,8 @@ interface ChatResponse {
     name: string;
   };
   fire_risk_data?: FireRiskData;
+  plume_forecast?: Record<string, unknown>;
+  wildfire_context?: Record<string, unknown>;
   sources: string[];
 }
 

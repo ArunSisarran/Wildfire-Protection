@@ -10,6 +10,7 @@ from math import radians, sin, cos, sqrt, atan2
 import google.generativeai as genai
 
 from .fems_endpoints import FEMSFireRiskAPI
+from .plume_endpoint import PlumeRequest, compute_dynamic_plume, MPS_PER_MPH
 
 # Load environment variables
 load_dotenv()
@@ -56,6 +57,8 @@ class ChatResponse(BaseModel):
     session_id: str = Field(..., description="Chat session ID")
     location_used: Dict[str, Any] = Field(..., description="Location coordinates used for the query")
     fire_risk_data: Optional[Dict[str, Any]] = Field(default=None, description="Fire risk assessment data if relevant")
+    plume_forecast: Optional[Dict[str, Any]] = Field(default=None, description="Smoke plume forecast data if available")
+    wildfire_context: Optional[Dict[str, Any]] = Field(default=None, description="Aggregated wildfire detections and smoke plumes")
     sources: List[str] = Field(default_factory=list, description="Data sources used")
 
 def get_or_create_chat_history(session_id: str) -> List[Dict[str, str]]:
@@ -201,8 +204,134 @@ def get_fire_risk_context(location: Dict[str, Any]) -> Dict[str, Any]:
         logger.error(f"Error getting fire risk context: {str(e)}")
         return {"error": str(e)}
 
-def create_system_prompt(location: Dict[str, Any], fire_risk_data: Dict[str, Any]) -> str:
-    """Create a system prompt with location and fire risk context"""
+
+def _safe_float(value: Any) -> Optional[float]:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _bearing_to_cardinal(bearing: Optional[float]) -> Optional[str]:
+    if bearing is None:
+        return None
+    directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+    idx = int((bearing % 360) / 22.5 + 0.5) % 16
+    return directions[idx]
+
+
+def get_plume_forecast(location: Dict[str, Any], fire_risk_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Derive a lightweight plume forecast for the AI assistant context."""
+
+    if not location or "latitude" not in location or "longitude" not in location:
+        return None
+
+    if fire_risk_data.get("error"):
+        return None
+
+    lat, lon = location["latitude"], location["longitude"]
+    weather = fire_risk_data.get("weather", {}) if isinstance(fire_risk_data, dict) else {}
+    nfdrs = fire_risk_data.get("nfdrs", {}) if isinstance(fire_risk_data, dict) else {}
+
+    wind_speed_m_s: Optional[float] = None
+    wind_direction: Optional[float] = None
+
+    if weather:
+        ws = _safe_float(weather.get("wind_speed"))
+        wd = _safe_float(weather.get("wind_direction"))
+        if ws is not None:
+            # Weather observations are typically in mph; convert to m/s
+            wind_speed_m_s = ws * MPS_PER_MPH
+        if wd is not None:
+            wind_direction = wd
+
+    burning_index = _safe_float(nfdrs.get("burning_index")) if nfdrs else None
+    one_hr_fm = _safe_float(nfdrs.get("one_hr_tl_fuel_moisture")) if nfdrs else None
+
+    plume_request = PlumeRequest(
+        lat=lat,
+        lon=lon,
+        hours=[0.5, 1.0, 2.0],
+        wind_speed=wind_speed_m_s,
+        wind_dir_from=wind_direction,
+        burning_index=burning_index,
+        one_hr_fm=one_hr_fm,
+        suppress_small_fires=False,
+        only_target_frames=True,
+        simulation_mode="cumulative_union",
+    )
+
+    try:
+        plume_response = compute_dynamic_plume(plume_request)
+    except Exception as exc:
+        logger.debug("Plume computation failed: %s", exc)
+        return None
+
+    if not plume_response.frames:
+        return None
+
+    frames_summary: List[Dict[str, Any]] = []
+    for frame in plume_response.frames:
+        meta = frame.meta or {}
+        plume_length_m = meta.get("plume_length_m")
+        plume_width_m = meta.get("plume_width_m")
+        frames_summary.append(
+            {
+                "hours": frame.hours,
+                "plume_length_km": round(plume_length_m / 1000.0, 2) if plume_length_m else None,
+                "plume_width_km": round(plume_width_m / 1000.0, 2) if plume_width_m else None,
+                "wind_dir_from": meta.get("wind_dir_from"),
+                "wind_cardinal": _bearing_to_cardinal(meta.get("wind_dir_from")),
+                "wind_speed_m_s": meta.get("wind_speed_m_s"),
+                "emission_factor": round(meta.get("emission_factor"), 2) if meta.get("emission_factor") is not None else None,
+                "station_id": meta.get("station_id"),
+            }
+        )
+
+    forecast = {
+        "frames": frames_summary,
+        "mode": plume_request.simulation_mode,
+        "geometry_preview": plume_response.frames[-1].geojson if plume_response.frames else None,
+    }
+
+    return forecast
+
+
+def format_plume_summary(plume_forecast: Optional[Dict[str, Any]]) -> str:
+    if not plume_forecast:
+        return "Plume forecast unavailable."
+
+    frames = plume_forecast.get("frames", [])
+    if not frames:
+        return "Plume forecast unavailable."
+
+    lines = ["Smoke plume forecast (dynamic model):"]
+    for frame in frames:
+        hours = frame.get("hours")
+        length = frame.get("plume_length_km")
+        direction = frame.get("wind_cardinal")
+        speed = frame.get("wind_speed_m_s")
+        parts = []
+        if length is not None:
+            parts.append(f"~{length} km downwind")
+        if direction:
+            parts.append(f"toward {direction}")
+        if speed is not None:
+            parts.append(f"wind {speed:.1f} m/s")
+        if not parts:
+            parts.append("insufficient data")
+        lines.append(f"- {hours} h: " + ", ".join(parts))
+    return "\n".join(lines)
+
+def create_system_prompt(
+    location: Dict[str, Any],
+    fire_risk_data: Dict[str, Any],
+    plume_forecast: Optional[Dict[str, Any]] = None,
+    wildfire_summary: Optional[str] = None,
+) -> str:
+    """Create a system prompt with location, fire risk, and plume context."""
     
     location_info = f"Location: {location.get('name', 'Unknown location')} (Lat: {location['latitude']}, Lon: {location['longitude']})"
     
@@ -245,12 +374,20 @@ Fire Danger Indices (NFDRS):
         if warnings:
             warning_lines = "\n".join(f"- {warning}" for warning in warnings)
             risk_context += f"\nWarnings:\n{warning_lines}\n"
-    
+
+    plume_context = format_plume_summary(plume_forecast)
+    wildfire_context = wildfire_summary or "No satellite wildfire detections near the query location in the past 24 hours."
+
     return f"""You are a specialized wildfire risk assessment AI assistant. You help users understand fire danger conditions and provide safety recommendations based on current weather and fire risk data.
 
 {location_info}
 
 {risk_context}
+
+{plume_context}
+
+Wildfire Satellite Summary:
+{wildfire_context}
 
 Guidelines for responses:
 1. Always provide actionable safety advice based on the current risk level
@@ -306,11 +443,26 @@ def build_chat_response(
     # Get conversation history
     chat_history = get_or_create_chat_history(session_id)
 
-    # Get fire risk context
+    # Get fire risk context and plume forecast
     fire_risk_data = get_fire_risk_context(location_to_use)
+    plume_forecast = get_plume_forecast(location_to_use, fire_risk_data)
+
+    wildfire_context: Optional[Dict[str, Any]] = None
+    wildfire_summary: Optional[str] = None
+    try:
+        from . import wildfire_map_endpoint
+        wildfire_context = wildfire_map_endpoint.collect_wildfire_context(
+            lat=location_to_use["latitude"],
+            lon=location_to_use["longitude"],
+            radius_km=1000.0,
+            precomputed_fire_risk=fire_risk_data,
+        )
+        wildfire_summary = wildfire_context.get("chat_summary")
+    except Exception as exc:
+        logger.debug("Wildfire satellite context unavailable: %s", exc)
 
     # Create system prompt with current context
-    system_prompt = create_system_prompt(location_to_use, fire_risk_data)
+    system_prompt = create_system_prompt(location_to_use, fire_risk_data, plume_forecast, wildfire_summary)
 
     # Build conversation context for Gemini
     conversation_context = system_prompt + "\n\nConversation History:\n"
@@ -341,12 +493,20 @@ def build_chat_response(
             sources.append("FEMS Weather Data")
         if fire_risk_data.get("nfdrs"):
             sources.append("NFDRS Fire Danger Indices")
+    if plume_forecast:
+        sources.append("Dynamic Plume Model")
+    if wildfire_context:
+        for source in wildfire_context.get("sources", []):
+            if source not in sources:
+                sources.append(source)
 
     return ChatResponse(
         response=ai_response,
         session_id=session_id,
         location_used=location_to_use,
         fire_risk_data=fire_risk_data if "error" not in fire_risk_data else None,
+        plume_forecast=plume_forecast,
+        wildfire_context=wildfire_context,
         sources=sources
     )
 
@@ -453,6 +613,7 @@ def simple_llm_test():
             "location": location,
             "fire_risk_level": fire_risk_data.get("risk_level", "Unknown"),
             "ai_response": chat_response.response,
+            "plume_forecast": chat_response.plume_forecast,
             "warnings": fire_risk_data.get("warnings", []),
             "timestamp": datetime.utcnow().isoformat()
         }
