@@ -250,42 +250,16 @@ const EnhancedMap: React.FC<EnhancedMapProps> = ({
       
       <button
         onClick={() => setIsDrawingMode(!isDrawingMode)}
-        className={`absolute top-20 right-5 px-4 py-2 rounded-lg shadow-lg transition-all ${
-          isDrawingMode ? 'bg-red-500 text-white animate-pulse' : 'bg-white text-gray-700 hover:bg-gray-100'
+        className={`absolute top-24 right-5 px-4 py-2 rounded-lg shadow-lg transition-all z-10 ${
+          isDrawingMode ? 'bg-red-500 text-white animate-pulse' : 'bg-white/90 text-gray-700 hover:bg-white'
         }`}
       >
         {isDrawingMode ? 'Click Map to Place Fire' : 'Add Fire Location'}
       </button>
-      
-      {stationPlume && (
-        <div className="absolute bottom-5 left-5 bg-white rounded-lg shadow-lg p-4 w-64">
-          <h3 className="font-semibold mb-2">Smoke Simulation</h3>
-          <p className="text-sm mb-3 truncate" title={stationPlume.stationName}>
-            {stationPlume.stationName}
-          </p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setIsAnimating(!isAnimating)}
-              className={`px-3 py-1 rounded w-full text-white ${
-                isAnimating ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-500 hover:bg-green-600'
-              }`}
-            >
-              {isAnimating ? 'Pause' : 'Play'}
-            </button>
-            <button
-              onClick={() => {
-                setIsAnimating(false);
-                setStationPlume(null);
-              }}
-              className="px-3 py-1 rounded bg-gray-500 text-white hover:bg-gray-600"
-            >
-              Clear
-            </button>
-          </div>
-        </div>
-      )}
+
     </div>
   );
-};
+}
+
 
 export default EnhancedMap;

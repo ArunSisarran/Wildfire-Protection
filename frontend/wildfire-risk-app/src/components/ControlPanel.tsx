@@ -1,5 +1,8 @@
 import React from 'react';
 
+// You might need to install a library like react-icons: npm install react-icons
+import { FiCloud, FiMessageSquare, FiTrash2, FiThermometer } from 'react-icons/fi'; 
+
 interface ControlPanelProps {
   showHeatmap: boolean;
   setShowHeatmap: (show: boolean) => void;
@@ -11,72 +14,76 @@ interface ControlPanelProps {
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({
-  showHeatmap,
-  setShowHeatmap,
-  showPlumes,
-  setShowPlumes,
-  onOpenChat,
-  onClearFires,
-  fireCount
+  showHeatmap, setShowHeatmap,
+  showPlumes, setShowPlumes,
+  onOpenChat, onClearFires, fireCount
 }) => {
   return (
-    <div className="absolute bottom-5 left-1/2 transform -translate-x-1/2 bg-white/95 backdrop-blur-lg rounded-full shadow-xl px-8 py-4 flex items-center space-x-6 z-10">
-      <div className="flex items-center space-x-3">
-        <span className="text-sm font-medium text-gray-700">🗺️ Heat Map</span>
-        <button
-          onClick={() => setShowHeatmap(!showHeatmap)}
-          className={`relative w-14 h-7 rounded-full transition-colors duration-300 ${
-            showHeatmap ? 'bg-green-500' : 'bg-gray-300'
-          }`}
-        >
-          <div
-            className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full transition-transform duration-300 shadow-md ${
-              showHeatmap ? 'transform translate-x-7' : ''
-            }`}
-          />
-        </button>
-      </div>
-
-      <div className="w-px h-8 bg-gray-300" />
-
-      <div className="flex items-center space-x-3">
-        <span className="text-sm font-medium text-gray-700">💨 Plumes</span>
-        <button
-          onClick={() => setShowPlumes(!showPlumes)}
-          className={`relative w-14 h-7 rounded-full transition-colors duration-300 ${
-            showPlumes ? 'bg-blue-500' : 'bg-gray-300'
-          }`}
-        >
-          <div
-            className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full transition-transform duration-300 shadow-md ${
-              showPlumes ? 'transform translate-x-7' : ''
-            }`}
-          />
-        </button>
-      </div>
-
+    <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-gray-900/80 backdrop-blur-lg rounded-full shadow-2xl p-2 z-20">
+      <ControlButton
+        label="Heatmap"
+        icon={<FiThermometer size={20} />}
+        isActive={showHeatmap}
+        onClick={() => setShowHeatmap(!showHeatmap)}
+        activeColor="bg-orange-500"
+      />
+      <ControlButton
+        label="Plumes"
+        icon={<FiCloud size={20} />}
+        isActive={showPlumes}
+        onClick={() => setShowPlumes(!showPlumes)}
+        activeColor="bg-blue-500"
+      />
+      
       {fireCount > 0 && (
-        <>
-          <div className="w-px h-8 bg-gray-300" />
-          <button
-            onClick={onClearFires}
-            className="flex items-center space-x-2 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition"
-          >
-            <span className="text-sm font-medium">Clear ({fireCount})</span>
-          </button>
-        </>
+        <ControlButton
+          label={`Clear Fires (${fireCount})`}
+          icon={<FiTrash2 size={20} />}
+          onClick={onClearFires}
+          isAction={true}
+        />
       )}
 
-      <div className="w-px h-8 bg-gray-300" />
+      <div className="w-px h-8 bg-white/20 mx-2" />
 
-      <button
+      <ControlButton
+        label="AI Assistant"
+        icon={<FiMessageSquare size={20} />}
         onClick={onOpenChat}
-        className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:shadow-lg transition"
-      >
-        <span className="text-sm font-medium">💬 AI Assistant</span>
-      </button>
+        isAction={true}
+      />
     </div>
   );
 };
+
+// --- FIX: DEFINED PROPS INTERFACE FOR THE HELPER COMPONENT ---
+interface ControlButtonProps {
+  label: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+  isActive?: boolean; // Made isActive optional to support action buttons
+  activeColor?: string;
+  isAction?: boolean;
+}
+
+// --- FIX: APPLIED THE PROPS INTERFACE TO THE COMPONENT ---
+const ControlButton: React.FC<ControlButtonProps> = ({ 
+  label, icon, isActive, onClick, activeColor = 'bg-blue-500', isAction = false 
+}) => (
+  <button
+    onClick={onClick}
+    className={`group relative flex items-center justify-center w-12 h-12 rounded-full transition-all duration-300
+      ${isActive ? `${activeColor} text-white shadow-lg` : 'text-white/70 hover:bg-white/20'}
+      ${isAction ? 'hover:bg-white/20' : ''}
+    `}
+  >
+    {icon}
+    <div className="absolute bottom-full mb-2 hidden group-hover:block whitespace-nowrap">
+      <div className="bg-gray-800 text-white text-xs rounded py-1 px-2">
+        {label}
+      </div>
+    </div>
+  </button>
+);
 
 export default ControlPanel;

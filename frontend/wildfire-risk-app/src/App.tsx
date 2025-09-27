@@ -1,32 +1,34 @@
 import React, { useState, useContext } from 'react';
-import ErrorBoundary from './components/ErrorBoundary';
-import EnhancedMap from './components/EnhancedMap';
-import DataPanel from './components/DataPanel';
-import FireRiskLegend from './components/FireRiskLegend';
-import ControlPanel from './components/ControlPanel';
-import StationInfoPopup from './components/StationInfoPopup';
-import ChatPanel from './components/ChatPanel';
 import { FireRiskProvider, FireRiskContext } from './context/FireRiskContext';
-import './styles/App.css';
+import EnhancedMap from './components/EnhancedMap';
+import Sidebar from './components/Sidebar';
+import Header from './components/Header';
+import ControlPanel from './components/ControlPanel';
+import FireRiskLegend from './components/FireRiskLegend';
+import ChatPanel from './components/ChatPanel';
+import MissionPopup from './components/MissionPopup';
 
 const AppContent: React.FC = () => {
+  const { fireLocations, addFireLocation, clearFireLocations } = useContext(FireRiskContext);
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [showPlumes, setShowPlumes] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  
-  const { fireLocations, addFireLocation, clearFireLocations } = useContext(FireRiskContext);
+  const [isMissionOpen, setIsMissionOpen] = useState(true); // Open by default on first visit
 
   return (
-    <div className="relative h-screen w-full overflow-hidden">
-      <EnhancedMap 
-        showHeatmap={showHeatmap}
-        showPlumes={showPlumes}
-        fireLocations={fireLocations}
-        onFireLocationAdd={addFireLocation}
-      />
-      <DataPanel />
+    <div className="relative w-screen h-screen overflow-hidden bg-gray-800">
+      <Header onShowMission={() => setIsMissionOpen(true)} />
+      <Sidebar />
+      <main className="w-full h-full">
+        <EnhancedMap
+          showHeatmap={showHeatmap}
+          showPlumes={showPlumes}
+          fireLocations={fireLocations}
+          onFireLocationAdd={addFireLocation}
+        />
+      </main>
       <FireRiskLegend />
-      <ControlPanel 
+      <ControlPanel
         showHeatmap={showHeatmap}
         setShowHeatmap={setShowHeatmap}
         showPlumes={showPlumes}
@@ -35,23 +37,16 @@ const AppContent: React.FC = () => {
         onClearFires={clearFireLocations}
         fireCount={fireLocations.length}
       />
-      <StationInfoPopup />
-      <ChatPanel 
-        isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
-      />
+      <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+      <MissionPopup isOpen={isMissionOpen} onClose={() => setIsMissionOpen(false)} />
     </div>
   );
 };
 
-const App: React.FC = () => {
-  return (
-    <ErrorBoundary>
-      <FireRiskProvider>
-        <AppContent />
-      </FireRiskProvider>
-    </ErrorBoundary>
-  );
-};
+const App: React.FC = () => (
+  <FireRiskProvider>
+    <AppContent />
+  </FireRiskProvider>
+);
 
 export default App;
