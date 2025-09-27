@@ -11,4 +11,5 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
 
-
+# Frontend now runs locally with: cd frontend && npm run dev
+# No need to containerize frontend for development
