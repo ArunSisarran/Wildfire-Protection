@@ -6,9 +6,9 @@ from datetime import datetime
 import logging
 import os
 
-from .fems_endpoints import FEMSFireRiskAPI
-from .llm_endpoint import router as llm_router
-from .plume_endpoint import router as plume_router
+from fems_endpoints import FEMSFireRiskAPI
+from llm_endpoint import router as llm_router
+from plume_endpoint import router as plume_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -91,9 +91,6 @@ class FireRiskAssessment(BaseModel):
 
 class GraphQLQuery(BaseModel):
     query: str = Field(..., description="GraphQL query string")
-
-# Get frontend URL from environment or use default
-frontend_url = os.getenv("FRONTEND_URL", "https://frontend-l4dndu693-zhuolin-lis-projects.vercel.app")
 
 
 @app.get("/")
@@ -372,7 +369,7 @@ async def health_check():
 async def test_llm_simple():
     """Simple test endpoint for LLM functionality"""
     try:
-        from .llm_endpoint import simple_llm_test
+        from llm_endpoint import simple_llm_test
         result = simple_llm_test()
         return result
     except Exception as e:
