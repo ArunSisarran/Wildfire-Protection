@@ -9,6 +9,7 @@ import os
 from app.api.fems_endpoints import FEMSFireRiskAPI
 from app.api.llm_endpoint import router as llm_router
 from app.api.plume_endpoint import router as plume_router, cone_polygon, PlumeResponse, PlumeFrame, MPS_PER_MPH
+from .wildfire_map_endpoint import router as wildfire_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,6 +31,7 @@ app.add_middleware(
 # Include LLM router
 app.include_router(llm_router)
 app.include_router(plume_router)
+app.include_router(wildfire_router)
 
 fems_api = FEMSFireRiskAPI()
 

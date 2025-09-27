@@ -324,34 +324,24 @@ async def plume(req: PlumeRequest = Body(...)) -> PlumeResponse:
 
 
 # ------------- dynamic route -------------
-@router.post("/plume_dynamic", response_model=PlumeResponse)
-async def plume_dynamic(req: PlumeRequest = Body(...)) -> PlumeResponse:
-    """Generate a sequence of plume segments by recomputing every step (default 30 min).
+def compute_dynamic_plume(req: PlumeRequest) -> PlumeResponse:
+    """Core dynamic plume generator used by both API route and other modules."""
 
-    Differences vs /plume:
-    - Instead of treating each requested hour independently from the original ignition point,
-      we march the ignition point forward segment-by-segment so wind changes (or curvature) can accumulate.
-    - Each segment length is computed using the segment duration only (step_minutes) and uses the *current* origin.
-    - We optionally re-fetch weather (wind) if the new origin drifts far enough to potentially change nearest station.
-    """
-
-    # Resolve initial ignition geometry / centroid
     base_lat, base_lon, derived_area = resolve_geometry(
         req.geometry, req.lat, req.lon, req.area_m2
     )
     area_m2 = derived_area
 
-    # Normalize and validate step duration
     step_hours = req.step_minutes / 60.0
     if step_hours <= 0:
         raise HTTPException(status_code=400, detail="step_minutes must be > 0")
 
     target_hours = sorted(set(float(h) for h in req.hours if h > 0))
+    if not target_hours:
+        raise HTTPException(status_code=400, detail="At least one positive hour is required")
     max_target = max(target_hours)
     total_steps = int(math.ceil(max_target / step_hours))
 
-    # Determine if we need station-derived data initially
-    # We still fetch station context for NFDRS defaults even if user fixes wind
     need_weather_initial = not (req.wind_speed and req.wind_dir_from is not None)
     need_nfdrs_initial = not (req.burning_index and req.one_hr_fm is not None)
 
@@ -379,26 +369,20 @@ async def plume_dynamic(req: PlumeRequest = Body(...)) -> PlumeResponse:
         if req.one_hr_fm is None:
             req.one_hr_fm = safe_float(nfdrs_obs.get("one_hr_tl_fuel_moisture"), 10.0)
 
-    # Apply final fallbacks
     wind_speed_m_s = wind_speed_m_s or 2.0
     wind_dir_from = wind_dir_from if wind_dir_from is not None else 180.0
     burning_index = req.burning_index or 30.0
     one_hr_fm = req.one_hr_fm or 10.0
 
-    # Dynamic march variables
     current_lat = base_lat
     current_lon = base_lon
     frames: List[PlumeFrame] = []
     cumulative_hours = 0.0
 
-    # Threshold to decide when to re-query station context (meters)
-    REQUERY_DISTANCE_M = 25_000.0  # 25 km threshold for refetch when wind not fixed
+    REQUERY_DISTANCE_M = 25_000.0
     distance_since_station_fetch = 0.0
-    last_fetch_lat = current_lat
-    last_fetch_lon = current_lon
 
     for step_index in range(1, total_steps + 1):
-        # Compute this segment (always step_hours long)
         cumulative_hours = step_index * step_hours
 
         try:
@@ -423,7 +407,6 @@ async def plume_dynamic(req: PlumeRequest = Body(...)) -> PlumeResponse:
             break
 
         if not segment:
-            # If suppressed, we stop early (nothing further to propagate realistically)
             logger.debug("Dynamic plume suppressed at step %s (cumulative %.2f h)", step_index, cumulative_hours)
             break
 
@@ -446,15 +429,13 @@ async def plume_dynamic(req: PlumeRequest = Body(...)) -> PlumeResponse:
             }
         )
 
-        # Depending on simulation_mode adjust geometry accumulation
         if req.simulation_mode == "segment":
             add_poly = geojson_poly
         elif req.simulation_mode == "cumulative_last":
-            # Replace prior frame polygon with a scaled representation of total travel (merge by overwriting)
             add_poly = geojson_poly
             if frames:
                 frames = [f for f in frames if f.meta.get("_mode_marker") != "last"]
-        else:  # cumulative_union
+        else:
             try:
                 from shapely.geometry import shape as shp_shape
                 from shapely.ops import unary_union
@@ -475,24 +456,19 @@ async def plume_dynamic(req: PlumeRequest = Body(...)) -> PlumeResponse:
                 )
             )
 
-        # Extract new origin (centerline forward tip). Polygon structure: [origin] + arc points + [origin]
         coords = geojson_poly.get("coordinates", [[]])[0]
         if len(coords) > 3:
-            # Middle arc point (exclude first + last which are origin)
             mid_index = 1 + (len(coords) - 2) // 2
             tip_lon, tip_lat = coords[mid_index]
             move_distance = haversine(current_lat, current_lon, tip_lat, tip_lon)
             current_lat, current_lon = tip_lat, tip_lon
             distance_since_station_fetch += move_distance
         else:
-            # Degenerate geometry; stop
             logger.debug("Degenerate plume geometry at step %s", step_index)
             break
 
-        # Re-fetch station / wind if we've moved far enough AND user did not lock wind.
         if (req.wind_speed is None or req.wind_dir_from is None) and distance_since_station_fetch > REQUERY_DISTANCE_M:
             distance_since_station_fetch = 0.0
-            last_fetch_lat, last_fetch_lon = current_lat, current_lon
             try:
                 sid2, w_obs2, _ = fetch_station_context(
                     lat=current_lat,
@@ -513,8 +489,14 @@ async def plume_dynamic(req: PlumeRequest = Body(...)) -> PlumeResponse:
             except Exception as fetch_exc:
                 logger.debug("Station requery failed at step %s: %s", step_index, fetch_exc)
 
-        # Stop if exceeded max target slightly due to float math
         if cumulative_hours >= max_target + (step_hours * 0.25):
             break
 
     return PlumeResponse(frames=frames, source="dynamic_cone_v1")
+
+
+@router.post("/plume_dynamic", response_model=PlumeResponse)
+async def plume_dynamic(req: PlumeRequest = Body(...)) -> PlumeResponse:
+    """Generate a sequence of plume segments by recomputing every step (default 30 min)."""
+
+    return compute_dynamic_plume(req)
