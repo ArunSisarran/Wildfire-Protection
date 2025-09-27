@@ -329,7 +329,7 @@ async def get_plume_for_station(
     # --- UPDATED: More hours for a longer, smoother animation path ---
     hours: List[float] = Query([
         0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6,
-        7, 8, 9, 10, 11, 12
+        7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24
     ], description="List of hours for plume travel time")
 ):
     """
