@@ -12,12 +12,14 @@ class FEMSFireRiskAPI:
         }
         
     def query_graphql(self, query: str) -> Dict:
+        print("\n[DEBUG] Outgoing GraphQL Query:\n", query)
         response = requests.post(
             self.base_url,
             json={'query': query},
             headers=self.headers
         )
-        
+        print("[DEBUG] Response Status:", response.status_code)
+        print("[DEBUG] Response Text:\n", response.text[:1000])  # Print first 1000 chars for brevity
         if response.status_code != 200:
             raise Exception(f"Query failed with status {response.status_code}: {response.text}")
             

@@ -2,31 +2,11 @@
 
 import { useState } from 'react';
 import { apiClient } from '@/lib/api';
+import ChatPanel from '../components/ChatModal';
+import WildfireMap from './WildfireMap';
 
 export default function Home() {
-  const [apiStatus, setApiStatus] = useState<string>('');
-  const [apiMessage, setApiMessage] = useState<string>('');
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
-
-  const testApiConnection = async () => {
-    setApiStatus('Testing...');
-    try {
-      const healthResponse = await apiClient.health();
-      if (healthResponse.data) {
-        setApiStatus('✅ Backend connected');
-        const helloResponse = await apiClient.hello('Wildfire Protection');
-        if (helloResponse.data) {
-          setApiMessage(helloResponse.data.message);
-        }
-      } else {
-        setApiStatus('❌ Backend connection failed');
-        setApiMessage(healthResponse.error || 'Unknown error');
-      }
-    } catch {
-      setApiStatus('❌ Network error');
-      setApiMessage('Cannot reach backend API');
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white text-gray-900">
@@ -80,25 +60,6 @@ export default function Home() {
                 plumes, affected radius, and AQI forecasts by region.
               </p>
               
-              {/* API Test Section */}
-              <div className="mt-4 pt-4 border-t border-orange-200">
-                <h4 className="font-semibold text-sm mb-2">Backend Connection Test</h4>
-                <button
-                  onClick={testApiConnection}
-                  className="text-xs bg-orange-600 text-white px-3 py-1 rounded hover:bg-orange-700"
-                >
-                  Test API
-                </button>
-                {apiStatus && (
-                  <div className="mt-2">
-                    <p className="text-xs font-medium">{apiStatus}</p>
-                    {apiMessage && (
-                      <p className="text-xs text-gray-600">{apiMessage}</p>
-                    )}
-                  </div>
-                )}
-              </div>
-
               {/* Wildfire Map */}
               <div className="mt-6">
                 <WildfireMap />
