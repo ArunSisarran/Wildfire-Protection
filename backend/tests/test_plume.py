@@ -23,6 +23,6 @@ payload2 = {
   "one_hr_fm": 5.0
 }
 
-r = requests.post("http://localhost:8000/api/plume", json=payload, timeout=30)
+r = requests.post("http://localhost:8000/api/plume_dynamic", json=payload, timeout=30)
 print(r.status_code)
 print(json.dumps(r.json(), indent=2))
