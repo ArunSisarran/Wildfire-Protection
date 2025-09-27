@@ -362,6 +362,25 @@ async def health_check():
             "timestamp": datetime.utcnow().isoformat()
         }
 
+class FireLocation(BaseModel):
+    id: int
+    name: str
+    latitude: float
+    longitude: float
+    intensity: Optional[float] = None
+    detected_at: Optional[str] = None
+
+@app.get("/api/fires", response_model=List[FireLocation])
+async def get_fires():
+    """
+    Return a list of mock fire locations for map visualization.
+    """
+    return [
+        {"id": 1, "name": "Shasta-Trinity Fire", "latitude": 40.789, "longitude": -122.195, "intensity": 0.8, "detected_at": "2025-09-25T14:00:00Z"},
+        {"id": 2, "name": "Sierra National Forest Fire", "latitude": 37.221, "longitude": -119.581, "intensity": 0.6, "detected_at": "2025-09-25T13:00:00Z"},
+        {"id": 3, "name": "Mendocino Fire", "latitude": 39.438, "longitude": -123.371, "intensity": 0.7, "detected_at": "2025-09-25T12:30:00Z"},
+    ]
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

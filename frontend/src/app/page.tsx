@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { apiClient } from '@/lib/api';
+import WildfireMap from './WildfireMap';
 
 export default function Home() {
   const [apiStatus, setApiStatus] = useState<string>('');
@@ -96,6 +97,11 @@ export default function Home() {
                     )}
                   </div>
                 )}
+              </div>
+
+              {/* Wildfire Map */}
+              <div className="mt-6">
+                <WildfireMap />
               </div>
             </div>
           </div>
