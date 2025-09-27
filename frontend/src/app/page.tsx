@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 import { apiClient } from '@/lib/api';
-import WildfireMap from './WildfireMap';
 
 export default function Home() {
   const [apiStatus, setApiStatus] = useState<string>('');
   const [apiMessage, setApiMessage] = useState<string>('');
+  const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
 
   const testApiConnection = async () => {
     setApiStatus('Testing...');
@@ -57,17 +57,17 @@ export default function Home() {
                 expected AQI—so people can prepare before stepping outside.
               </p>
               <div className="flex flex-col sm:flex-row gap-3">
-                <a
-                  href="#features"
+                <button
+                  onClick={() => setIsChatOpen(!isChatOpen)}
                   className="inline-flex items-center justify-center rounded-md bg-orange-600 px-5 py-3 text-white font-semibold shadow-sm hover:bg-orange-700"
                 >
-                  Explore features
-                </a>
+                  🔥 Chat with Fire Risk Assistant
+                </button>
                 <a
-                  href="#audience"
+                  href="#features"
                   className="inline-flex items-center justify-center rounded-md border border-orange-200 px-5 py-3 font-semibold text-orange-700 bg-white hover:bg-orange-50"
                 >
-                  Who we help
+                  Explore features
                 </a>
               </div>
             </div>
@@ -177,6 +177,12 @@ export default function Home() {
           © {new Date().getFullYear()} Wildfire Protection
         </div>
       </footer>
+
+      {/* Chat Panel */}
+      <ChatPanel 
+        isOpen={isChatOpen} 
+        onToggle={() => setIsChatOpen(!isChatOpen)} 
+      />
     </div>
   );
 }
