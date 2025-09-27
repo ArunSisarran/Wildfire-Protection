@@ -162,6 +162,16 @@ class PlumeRequest(BaseModel):
     diffusion_multiplier: float = Field(1.0, ge=0.5, le=3.0)
     loft_multiplier: float = Field(1.0, ge=0.5, le=3.0)
     suppress_small_fires: bool = False
+    step_minutes: int = Field(30, ge=10, le=120, description="Temporal resolution for dynamic plume (minutes)")
+    simulation_mode: str = Field(
+        "segment",
+        pattern="^(segment|cumulative_union|cumulative_last)$",
+        description="segment: each frame is one step; cumulative_union: union of all segments up to that time; cumulative_last: only last (growing) segment representing total travel length",
+    )
+    only_target_frames: bool = Field(
+        False,
+        description="If true, dynamic endpoint only returns frames matching requested hours; otherwise returns every step",
+    )
 
     @field_validator("hours")
     @classmethod
@@ -311,3 +321,200 @@ async def plume(req: PlumeRequest = Body(...)) -> PlumeResponse:
             frames.append(PlumeFrame(hours=h, geojson=geojson_poly, meta=meta))
 
     return PlumeResponse(frames=frames, source="approx_cone_v1")
+
+
+# ------------- dynamic route -------------
+@router.post("/plume_dynamic", response_model=PlumeResponse)
+async def plume_dynamic(req: PlumeRequest = Body(...)) -> PlumeResponse:
+    """Generate a sequence of plume segments by recomputing every step (default 30 min).
+
+    Differences vs /plume:
+    - Instead of treating each requested hour independently from the original ignition point,
+      we march the ignition point forward segment-by-segment so wind changes (or curvature) can accumulate.
+    - Each segment length is computed using the segment duration only (step_minutes) and uses the *current* origin.
+    - We optionally re-fetch weather (wind) if the new origin drifts far enough to potentially change nearest station.
+    """
+
+    # Resolve initial ignition geometry / centroid
+    base_lat, base_lon, derived_area = resolve_geometry(
+        req.geometry, req.lat, req.lon, req.area_m2
+    )
+    area_m2 = derived_area
+
+    # Normalize and validate step duration
+    step_hours = req.step_minutes / 60.0
+    if step_hours <= 0:
+        raise HTTPException(status_code=400, detail="step_minutes must be > 0")
+
+    target_hours = sorted(set(float(h) for h in req.hours if h > 0))
+    max_target = max(target_hours)
+    total_steps = int(math.ceil(max_target / step_hours))
+
+    # Determine if we need station-derived data initially
+    # We still fetch station context for NFDRS defaults even if user fixes wind
+    need_weather_initial = not (req.wind_speed and req.wind_dir_from is not None)
+    need_nfdrs_initial = not (req.burning_index and req.one_hr_fm is not None)
+
+    station_id, weather_obs, nfdrs_obs = fetch_station_context(
+        lat=base_lat,
+        lon=base_lon,
+        station_id=req.station_id,
+        need_weather=need_weather_initial,
+        need_nfdrs=need_nfdrs_initial,
+    )
+
+    wind_speed_m_s = req.wind_speed
+    wind_dir_from = req.wind_dir_from
+
+    if need_weather_initial and weather_obs:
+        ws = safe_float(weather_obs.get("wind_speed"))
+        wd = safe_float(weather_obs.get("wind_direction"), 180.0)
+        if ws is not None:
+            wind_speed_m_s = wind_speed_m_s or (ws * MPS_PER_MPH)
+        wind_dir_from = wind_dir_from if wind_dir_from is not None else wd
+
+    if need_nfdrs_initial and nfdrs_obs:
+        if req.burning_index is None:
+            req.burning_index = safe_float(nfdrs_obs.get("burning_index"), 30.0)
+        if req.one_hr_fm is None:
+            req.one_hr_fm = safe_float(nfdrs_obs.get("one_hr_tl_fuel_moisture"), 10.0)
+
+    # Apply final fallbacks
+    wind_speed_m_s = wind_speed_m_s or 2.0
+    wind_dir_from = wind_dir_from if wind_dir_from is not None else 180.0
+    burning_index = req.burning_index or 30.0
+    one_hr_fm = req.one_hr_fm or 10.0
+
+    # Dynamic march variables
+    current_lat = base_lat
+    current_lon = base_lon
+    frames: List[PlumeFrame] = []
+    cumulative_hours = 0.0
+
+    # Threshold to decide when to re-query station context (meters)
+    REQUERY_DISTANCE_M = 25_000.0  # 25 km threshold for refetch when wind not fixed
+    distance_since_station_fetch = 0.0
+    last_fetch_lat = current_lat
+    last_fetch_lon = current_lon
+
+    for step_index in range(1, total_steps + 1):
+        # Compute this segment (always step_hours long)
+        cumulative_hours = step_index * step_hours
+
+        try:
+            segment = cone_polygon(
+                lat=current_lat,
+                lon=current_lon,
+                wind_speed_m_s=wind_speed_m_s,
+                wind_dir_from_deg=wind_dir_from,
+                hours=step_hours,
+                burning_index=burning_index,
+                one_hr_fm=one_hr_fm,
+                viirs_frp=req.viirs_frp,
+                area_m2=area_m2,
+                viirs_confidence=req.viirs_confidence,
+                emission_multiplier=req.emission_multiplier,
+                diffusion_multiplier=req.diffusion_multiplier,
+                loft_multiplier=req.loft_multiplier,
+                suppress_small_fires=req.suppress_small_fires,
+            )
+        except Exception as exc:
+            logger.error("Dynamic plume segment failed (step %s): %s", step_index, exc)
+            break
+
+        if not segment:
+            # If suppressed, we stop early (nothing further to propagate realistically)
+            logger.debug("Dynamic plume suppressed at step %s (cumulative %.2f h)", step_index, cumulative_hours)
+            break
+
+        geojson_poly, meta = segment
+
+        is_target = any(abs(cumulative_hours - th) < 1e-6 for th in target_hours)
+
+        meta.update(
+            {
+                "segment_hours": step_hours,
+                "cumulative_hours": round(cumulative_hours, 3),
+                "wind_speed_m_s": wind_speed_m_s,
+                "wind_dir_from": wind_dir_from,
+                "station_id": station_id,
+                "burning_index": burning_index,
+                "one_hr_fm": one_hr_fm,
+                "area_m2": area_m2,
+                "target_frame": is_target,
+                "simulation_mode": req.simulation_mode,
+            }
+        )
+
+        # Depending on simulation_mode adjust geometry accumulation
+        if req.simulation_mode == "segment":
+            add_poly = geojson_poly
+        elif req.simulation_mode == "cumulative_last":
+            # Replace prior frame polygon with a scaled representation of total travel (merge by overwriting)
+            add_poly = geojson_poly
+            if frames:
+                frames = [f for f in frames if f.meta.get("_mode_marker") != "last"]
+        else:  # cumulative_union
+            try:
+                from shapely.geometry import shape as shp_shape
+                from shapely.ops import unary_union
+                existing = [shp_shape(f.geojson) for f in frames]
+                current_geom = shp_shape(geojson_poly)
+                union_geom = unary_union(existing + [current_geom]) if existing else current_geom
+                add_poly = mapping(union_geom)
+            except Exception as union_exc:
+                logger.debug("Union failed, fallback to segment polygon: %s", union_exc)
+                add_poly = geojson_poly
+
+        if (not req.only_target_frames) or (req.only_target_frames and is_target):
+            frames.append(
+                PlumeFrame(
+                    hours=round(cumulative_hours, 3),
+                    geojson=add_poly,
+                    meta={**meta, "_mode_marker": "last" if req.simulation_mode == "cumulative_last" else "segment"},
+                )
+            )
+
+        # Extract new origin (centerline forward tip). Polygon structure: [origin] + arc points + [origin]
+        coords = geojson_poly.get("coordinates", [[]])[0]
+        if len(coords) > 3:
+            # Middle arc point (exclude first + last which are origin)
+            mid_index = 1 + (len(coords) - 2) // 2
+            tip_lon, tip_lat = coords[mid_index]
+            move_distance = haversine(current_lat, current_lon, tip_lat, tip_lon)
+            current_lat, current_lon = tip_lat, tip_lon
+            distance_since_station_fetch += move_distance
+        else:
+            # Degenerate geometry; stop
+            logger.debug("Degenerate plume geometry at step %s", step_index)
+            break
+
+        # Re-fetch station / wind if we've moved far enough AND user did not lock wind.
+        if (req.wind_speed is None or req.wind_dir_from is None) and distance_since_station_fetch > REQUERY_DISTANCE_M:
+            distance_since_station_fetch = 0.0
+            last_fetch_lat, last_fetch_lon = current_lat, current_lon
+            try:
+                sid2, w_obs2, _ = fetch_station_context(
+                    lat=current_lat,
+                    lon=current_lon,
+                    station_id=req.station_id,
+                    need_weather=True,
+                    need_nfdrs=False,
+                )
+                if w_obs2:
+                    ws2 = safe_float(w_obs2.get("wind_speed"))
+                    wd2 = safe_float(w_obs2.get("wind_direction"))
+                    if ws2 is not None:
+                        wind_speed_m_s = ws2 * MPS_PER_MPH
+                    if wd2 is not None:
+                        wind_dir_from = wd2
+                if sid2:
+                    station_id = sid2
+            except Exception as fetch_exc:
+                logger.debug("Station requery failed at step %s: %s", step_index, fetch_exc)
+
+        # Stop if exceeded max target slightly due to float math
+        if cumulative_hours >= max_target + (step_hours * 0.25):
+            break
+
+    return PlumeResponse(frames=frames, source="dynamic_cone_v1")
