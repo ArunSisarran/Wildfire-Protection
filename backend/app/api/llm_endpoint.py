@@ -9,7 +9,7 @@ from math import radians, sin, cos, sqrt, atan2
 
 import google.generativeai as genai
 
-from .fems_endpoints import FEMSFireRiskAPI
+from fems_endpoints import FEMSFireRiskAPI
 
 # Load environment variables
 load_dotenv()
