@@ -8,7 +8,7 @@ import os
 
 from fems_endpoints import FEMSFireRiskAPI
 from llm_endpoint import router as llm_router
-from plume_endpoint import router as plume_router
+from plume_endpoint import router as plume_router, cone_polygon, PlumeResponse, PlumeFrame, MPS_PER_MPH
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -235,7 +235,7 @@ async def calculate_fire_risk(
 @app.get("/api/fire-risk/assessment")
 async def get_fire_risk_assessment(
     station_ids: Optional[str] = Query(None, description="Comma-separated station IDs. If not provided, uses top 5 active NY stations"),
-    limit: int = Query(5, description="Number of stations to assess", ge=1, le=20)
+    limit: int = Query(20, description="Number of stations to assess", ge=1, le=20)
 ):
     """
     Get comprehensive fire risk assessment for specified stations or top NY stations
@@ -322,6 +322,62 @@ async def get_fire_risk_assessment(
     except Exception as e:
         logger.error(f"Error performing fire risk assessment: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/stations/{station_id}/plume", response_model=PlumeResponse, tags=["Plume"])
+async def get_plume_for_station(
+    station_id: int,
+    # --- UPDATED: More hours for a longer, smoother animation path ---
+    hours: List[float] = Query([
+        0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6,
+        7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24
+    ], description="List of hours for plume travel time")
+):
+    """
+    Generates a smoke plume projection for a given weather station.
+    """
+    try:
+        meta_resp = fems_api.get_station_metadata(str(station_id))
+        station_meta = meta_resp.get("data", {}).get("stationMetaData", {}).get("data", [])
+        if not station_meta:
+            raise HTTPException(status_code=404, detail="Station not found")
+        
+        station_info = station_meta[0]
+        lat, lon = station_info['latitude'], station_info['longitude']
+
+        weather_resp = fems_api.get_weather_observations(str(station_id), hours_back=3)
+        weather_list = weather_resp.get("data", {}).get("weatherObs", {}).get("data", [])
+        latest_weather = weather_list[-1] if weather_list else {}
+
+        nfdrs_resp = fems_api.get_nfdrs_observations(str(station_id), days_back=1)
+        nfdrs_list = nfdrs_resp.get("data", {}).get("nfdrsObs", {}).get("data", [])
+        latest_nfdrs = nfdrs_list[-1] if nfdrs_list else {}
+
+        wind_speed_mph = latest_weather.get("wind_speed", 5.0)
+        wind_speed_m_s = (wind_speed_mph or 0.0) * MPS_PER_MPH
+        wind_dir_from = latest_weather.get("wind_direction", 180.0)
+        burning_index = latest_nfdrs.get("burning_index", 30.0)
+        one_hr_fm = latest_nfdrs.get("one_hr_tl_fuel_moisture", 10.0)
+
+        frames: List[PlumeFrame] = []
+        for h in sorted(set(h for h in hours if h > 0)):
+            res = cone_polygon(
+                lat=lat, lon=lon, wind_speed_m_s=wind_speed_m_s,
+                wind_dir_from_deg=wind_dir_from, hours=h,
+                burning_index=burning_index, one_hr_fm=one_hr_fm,
+                suppress_small_fires=False 
+            )
+            if res:
+                geojson_poly, meta = res
+                meta.update({
+                    "hours": h, "wind_speed_mph": wind_speed_mph, "wind_dir_from": wind_dir_from,
+                    "burning_index": burning_index, "one_hr_fm": one_hr_fm, "station_id": station_id
+                })
+                frames.append(PlumeFrame(hours=h, geojson=geojson_poly, meta=meta))
+
+        return PlumeResponse(frames=frames, source="station_cone_v1")
+    except Exception as e:
+        logger.error(f"Error generating plume for station {station_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Could not generate plume: {e}")
 
 @app.post("/api/graphql/query")
 async def execute_graphql_query(query: GraphQLQuery):
