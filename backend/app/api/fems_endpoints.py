@@ -227,3 +227,19 @@ class FEMSFireRiskAPI:
         score += rh_risk * weights['relative_humidity']
         
         return round(score, 2)
+
+    def get_station_metadata(self, station_id: str) -> Dict:
+            """Fetches metadata for a single station."""
+            query = f"""
+            query {{
+                stationMetaData(stationIds: "{station_id}") {{
+                    data {{
+                        station_id
+                        station_name
+                        latitude
+                        longitude
+                    }}
+                }}
+            }}
+            """
+            return self.query_graphql(query)
