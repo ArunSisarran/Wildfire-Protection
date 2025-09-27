@@ -1,6 +1,6 @@
 {
-  "short_name": "Fire Risk Map",
-  "name": "Fire Risk Heat Map Application",
+  "short_name": "Wildfire Risk",
+  "name": "Wildfire Risk Assessment Tool",
   "icons": [
     {
       "src": "favicon.ico",
@@ -10,6 +10,6 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
+  "theme_color": "#dc2626",
   "background_color": "#ffffff"
 }

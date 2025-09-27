@@ -1,6 +1,8 @@
 import { NYBounds, Coordinates, RiskLevel } from '../types';
 
-export const API_BASE_URL = process.env.REACT_APP_FEMS_API_BASE_URL || 'https://your-api.vercel.app';
+export const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://your-api.vercel.app';
+export const PLUME_API_BASE_URL = process.env.REACT_APP_PLUME_API || 'https://your-plume-api.vercel.app';
+export const GEMINI_API_BASE_URL = process.env.REACT_APP_GEMINI_API || 'https://your-gemini-api.vercel.app';
 export const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || '';
 
 export const NY_CONFIG = {
@@ -22,13 +24,30 @@ export const RISK_LEVELS: Record<string, RiskLevel> = {
   EXTREME: { color: '#dc2626', range: [80, 100], label: 'Extreme' }
 };
 
+export const HEATMAP_GRADIENT = [
+  'rgba(0, 255, 0, 0)',
+  'rgba(0, 255, 0, 0.6)',
+  'rgba(132, 204, 22, 0.7)',
+  'rgba(234, 179, 8, 0.8)',
+  'rgba(249, 115, 22, 0.9)',
+  'rgba(220, 38, 38, 1)'
+];
+
 export const API_ENDPOINTS = {
   stations: '/api/stations/ny',
   weatherObs: '/api/weather/observations',
   nfdrsObs: '/api/nfdrs/observations',
   fireRisk: '/api/fire-risk/assessment',
-  percentiles: '/api/fire-danger/percentiles',
   health: '/api/health'
 };
 
-export const UPDATE_INTERVAL = 60000; // 1 minute
+export const PLUME_ENDPOINTS = {
+  plume: '/api/plume',
+  plumeDynamic: '/api/plume_dynamic'
+};
+
+export const GEMINI_ENDPOINTS = {
+  chat: '/api/llm/chat'
+};
+
+export const UPDATE_INTERVAL = 600000; // 1 minute

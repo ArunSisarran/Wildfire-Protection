@@ -9,7 +9,7 @@ from pyproj import Geod
 from shapely.geometry import Polygon, mapping, shape
 from shapely.geometry.base import BaseGeometry
 
-from .fems_endpoints import FEMSFireRiskAPI
+from fems_endpoints import FEMSFireRiskAPI
 
 router = APIRouter(prefix="/api", tags=["Plume"])
 

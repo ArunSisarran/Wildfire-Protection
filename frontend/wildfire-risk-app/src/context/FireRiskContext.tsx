@@ -1,5 +1,5 @@
 import React, { createContext, useState, ReactNode } from 'react';
-import { FireRiskAssessment, FireRiskStation } from '../types';
+import { FireRiskAssessment, FireRiskStation, FireLocation } from '../types';
 import { useFireRiskData } from '../hooks/useFireRiskData';
 
 interface FireRiskContextType {
@@ -9,6 +9,9 @@ interface FireRiskContextType {
   refreshData: () => void;
   selectedStation: FireRiskStation | null;
   setSelectedStation: (station: FireRiskStation | null) => void;
+  fireLocations: FireLocation[];
+  addFireLocation: (location: FireLocation) => void;
+  clearFireLocations: () => void;
 }
 
 export const FireRiskContext = createContext<FireRiskContextType>({
@@ -17,7 +20,10 @@ export const FireRiskContext = createContext<FireRiskContextType>({
   error: null,
   refreshData: () => {},
   selectedStation: null,
-  setSelectedStation: () => {}
+  setSelectedStation: () => {},
+  fireLocations: [],
+  addFireLocation: () => {},
+  clearFireLocations: () => {}
 });
 
 interface FireRiskProviderProps {
@@ -27,6 +33,15 @@ interface FireRiskProviderProps {
 export const FireRiskProvider: React.FC<FireRiskProviderProps> = ({ children }) => {
   const { assessment, loading, error, refreshData } = useFireRiskData();
   const [selectedStation, setSelectedStation] = useState<FireRiskStation | null>(null);
+  const [fireLocations, setFireLocations] = useState<FireLocation[]>([]);
+
+  const addFireLocation = (location: FireLocation) => {
+    setFireLocations(prev => [...prev, location]);
+  };
+
+  const clearFireLocations = () => {
+    setFireLocations([]);
+  };
 
   return (
     <FireRiskContext.Provider
@@ -36,7 +51,10 @@ export const FireRiskProvider: React.FC<FireRiskProviderProps> = ({ children }) 
         error,
         refreshData,
         selectedStation,
-        setSelectedStation
+        setSelectedStation,
+        fireLocations,
+        addFireLocation,
+        clearFireLocations
       }}
     >
       {children}

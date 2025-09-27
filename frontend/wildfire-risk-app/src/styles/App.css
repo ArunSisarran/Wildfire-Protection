@@ -28,3 +28,28 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+
+/* Fire animation */
+@keyframes fireGlow {
+  0%, 100% { 
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+    transform: scale(1);
+  }
+  50% { 
+    box-shadow: 0 0 40px rgba(239, 68, 68, 0.8);
+    transform: scale(1.05);
+  }
+}
+
+.fire-marker {
+  animation: fireGlow 2s ease-in-out infinite;
+}
+
+/* Map controls override */
+.gm-style-iw-c {
+  border-radius: 12px !important;
+}
+
+.gm-style-iw-d {
+  overflow: hidden !important;
+}
