@@ -10,14 +10,14 @@ class FireRiskAPI {
   private geminiURL: string;
 
   constructor() {
-    this.baseURL = API_BASE_URL;
-    this.plumeURL = PLUME_API_BASE_URL;
-    this.geminiURL = GEMINI_API_BASE_URL;
+    this.baseURL = this.normalizeBaseUrl(API_BASE_URL);
+    this.plumeURL = this.normalizeBaseUrl(PLUME_API_BASE_URL);
+    this.geminiURL = this.normalizeBaseUrl(GEMINI_API_BASE_URL);
   }
 
   async fetchFireRiskAssessment(): Promise<FireRiskAssessment> {
     try {
-      const response = await axios.get(`${this.baseURL}${API_ENDPOINTS.fireRisk}`);
+  const response = await axios.get(this.buildUrl(this.baseURL, API_ENDPOINTS.fireRisk));
       return response.data;
     } catch (error) {
       console.error('API Error:', error);
@@ -27,7 +27,7 @@ class FireRiskAPI {
 
   async calculatePlume(fireLocation: FireLocation, hours: number[] = [1, 2, 4]): Promise<PlumeData> {
     try {
-      const response = await axios.post(`${this.plumeURL}${PLUME_ENDPOINTS.plume}`, {
+  const response = await axios.post(this.buildUrl(this.plumeURL, PLUME_ENDPOINTS.plume), {
         lat: fireLocation.coordinates.lat,
         lon: fireLocation.coordinates.lng,
         hours: hours,
@@ -45,7 +45,7 @@ class FireRiskAPI {
 
   async calculateDynamicPlume(fireLocation: FireLocation, maxHours: number = 6): Promise<PlumeData> {
     try {
-      const response = await axios.post(`${this.plumeURL}${PLUME_ENDPOINTS.plumeDynamic}`, {
+  const response = await axios.post(this.buildUrl(this.plumeURL, PLUME_ENDPOINTS.plumeDynamic), {
         lat: fireLocation.coordinates.lat,
         lon: fireLocation.coordinates.lng,
         hours: Array.from({ length: maxHours }, (_, i) => i + 1),
@@ -64,7 +64,7 @@ class FireRiskAPI {
 
   async sendChatMessage(message: string, sessionId: string, location?: any): Promise<any> {
     try {
-      const response = await axios.post(`${this.geminiURL}${GEMINI_ENDPOINTS.chat}`, {
+  const response = await axios.post(this.buildUrl(this.geminiURL, GEMINI_ENDPOINTS.chat), {
         message,
         session_id: sessionId,
         location: location || { latitude: 42.7, longitude: -75.8 }
@@ -84,7 +84,7 @@ class FireRiskAPI {
   async getPlumeForStation(stationId: number): Promise<PlumeData> {
     try {
       // Calls the new FastAPI endpoint for generating a plume from a station
-      const response = await axios.get(`${this.baseURL}/api/stations/${stationId}/plume`);
+  const response = await axios.get(this.buildUrl(this.baseURL, `/api/stations/${stationId}/plume`));
       return response.data;
     } catch (error) {
       console.error(`Error fetching plume for station ${stationId}:`, error);
@@ -96,6 +96,18 @@ class FireRiskAPI {
       };
       return this.getMockPlume(mockFireLocation, [1, 3, 6]);
     }
+  }
+
+  private normalizeBaseUrl(url?: string): string {
+    if (!url) {
+      return '';
+    }
+    return url.replace(/\/+$/, '');
+  }
+
+  private buildUrl(base: string, path: string): string {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    return base ? `${base}${normalizedPath}` : normalizedPath;
   }
 
   private getMockAssessment(): FireRiskAssessment {
