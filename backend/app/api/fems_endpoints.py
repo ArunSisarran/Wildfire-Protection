@@ -2,7 +2,7 @@ import requests
 import json
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
-import pandas as pd
+import time
 
 class FEMSFireRiskAPI:
     def __init__(self):
@@ -24,10 +24,13 @@ class FEMSFireRiskAPI:
         return response.json()
     
     def get_ny_stations(self) -> Dict:
+        """
+        Fetches metadata for all stations, not limited to New York.
+        The stateId filter has been removed.
+        """
         query = """
         query {
             stationMetaData(
-                stateId: "NY"
                 hasHistoricData: TRUE
                 stationType: "RAWS (SAT NFDRS)"
                 returnAll: true
@@ -62,7 +65,6 @@ class FEMSFireRiskAPI:
                 startDateTimeRange: "{start_time.strftime('%Y-%m-%dT%H:%M:%SZ')}"
                 endDateTimeRange: "{end_time.strftime('%Y-%m-%dT%H:%M:%SZ')}"
                 stationIds: "{station_ids}"
-                timeZone: "America/New_York"
             ) {{
                 _metadata {{
                     total_count
@@ -225,124 +227,3 @@ class FEMSFireRiskAPI:
         score += rh_risk * weights['relative_humidity']
         
         return round(score, 2)
-
-def main():
-    print("=" * 60)
-    print("FEMS Fire Risk Assessment - New York State")
-    print("=" * 60)
-    
-    api = FEMSFireRiskAPI()
-    
-    try:
-        print("\n1. Fetching New York weather stations...")
-        stations_response = api.get_ny_stations()
-        stations = stations_response['data']['stationMetaData']['data']
-        
-        if not stations:
-            print("No stations found in New York")
-            return
-        
-        print(f"   Found {len(stations)} stations in New York")
-        
-        active_stations = [s for s in stations if s.get('station_status') == 'A'][:5]
-        station_ids = ','.join(str(s['station_id']) for s in active_stations)
-        
-        print(f"\n   Using stations: {station_ids}")
-        for station in active_stations:
-            print(f"     - {station['station_name']} ({station['station_id']})")
-            print(f"       Lat: {station['latitude']}, Lon: {station['longitude']}")
-        
-        print("\n2. Fetching current weather conditions...")
-        weather_response = api.get_weather_observations(station_ids)
-        weather_data = weather_response['data']['weatherObs']['data']
-        
-        print("\n3. Fetching fire danger indices...")
-        nfdrs_response = api.get_nfdrs_observations(station_ids)
-        nfdrs_data = nfdrs_response['data']['nfdrsObs']['data']
-        
-        print("\n" + "=" * 60)
-        print("FIRE RISK ANALYSIS RESULTS")
-        print("=" * 60)
-        
-        risk_assessments = []
-        
-        for station in active_stations:
-            station_id = station['station_id']
-            
-            station_weather = next((w for w in weather_data if w['station_id'] == station_id), {})
-            station_nfdrs = next((n for n in nfdrs_data if n['station_id'] == station_id), {})
-            
-            if not station_nfdrs:
-                continue
-            
-            print(f"\nStation: {station['station_name']}")
-            print(f"Location: {station['latitude']}, {station['longitude']}")
-            print("-" * 40)
-            
-            risk_score = api.calculate_fire_risk_score(station_nfdrs, station_weather)
-            
-            if risk_score < 20:
-                risk_level = "LOW"
-            elif risk_score < 40:
-                risk_level = "MODERATE"
-            elif risk_score < 60:
-                risk_level = "HIGH"
-            elif risk_score < 80:
-                risk_level = "VERY HIGH"
-            else:
-                risk_level = "EXTREME"
-            
-            print(f"\n🔥 FIRE RISK SCORE: {risk_score}/100 - {risk_level}")
-            
-            print(f"\nFire Danger Indices:")
-            print(f"  • Burning Index: {station_nfdrs.get('burning_index', 'N/A')}")
-            print(f"  • Ignition Component: {station_nfdrs.get('ignition_component', 'N/A')}%")
-            print(f"  • Spread Component: {station_nfdrs.get('spread_component', 'N/A')}")
-            print(f"  • Energy Release Component: {station_nfdrs.get('energy_release_component', 'N/A')}")
-            print(f"  • KBDI (Drought Index): {station_nfdrs.get('kbdi', 'N/A')}")
-            
-            print(f"\nFuel Moisture Content:")
-            print(f"  • 1-hour fuels: {station_nfdrs.get('one_hr_tl_fuel_moisture', 'N/A')}%")
-            print(f"  • 10-hour fuels: {station_nfdrs.get('ten_hr_tl_fuel_moisture', 'N/A')}%")
-            print(f"  • 100-hour fuels: {station_nfdrs.get('hun_hr_tl_fuel_moisture', 'N/A')}%")
-            print(f"  • 1000-hour fuels: {station_nfdrs.get('thou_hr_tl_fuel_moisture', 'N/A')}%")
-            
-            if station_weather:
-                print(f"\nWeather Conditions:")
-                print(f"  • Temperature: {station_weather.get('temperature', 'N/A')}°F")
-                print(f"  • Relative Humidity: {station_weather.get('relative_humidity', 'N/A')}%")
-                print(f"  • 24hr Precipitation: {station_weather.get('hr24Precipitation', 'N/A')} inches")
-                
-            risk_assessments.append({
-                'station': station['station_name'],
-                'risk_score': risk_score,
-                'risk_level': risk_level,
-                'lat': station['latitude'],
-                'lon': station['longitude']
-            })
-        
-        print("\n" + "=" * 60)
-        print("RISK SUMMARY - HIGH RISK AREAS")
-        print("=" * 60)
-        
-        high_risk = [r for r in risk_assessments if r['risk_score'] >= 40]
-        if high_risk:
-            high_risk.sort(key=lambda x: x['risk_score'], reverse=True)
-            print("\n⚠️  HIGH FIRE RISK LOCATIONS:")
-            for area in high_risk:
-                print(f"  • {area['station']}: {area['risk_level']} (Score: {area['risk_score']})")
-                print(f"    Location: {area['lat']}, {area['lon']}")
-        else:
-            print("\n✓ No high-risk areas detected at this time")
-        
-        print("\n" + "=" * 60)
-        print("Assessment complete. Monitor high-risk areas closely.")
-        print("=" * 60)
-        
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-        print("\nNote: This is a proof of concept. Some stations may not have recent data.")
-
-if __name__ == "__main__":
-    main()
-

@@ -235,7 +235,7 @@ async def calculate_fire_risk(
 @app.get("/api/fire-risk/assessment")
 async def get_fire_risk_assessment(
     station_ids: Optional[str] = Query(None, description="Comma-separated station IDs. If not provided, uses top 5 active NY stations"),
-    limit: int = Query(5, description="Number of stations to assess", ge=1, le=20)
+    limit: int = Query(20, description="Number of stations to assess", ge=1, le=20)
 ):
     """
     Get comprehensive fire risk assessment for specified stations or top NY stations
