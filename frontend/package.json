@@ -6,7 +6,10 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "dev:full": "echo 'Starting full development environment...' && echo 'Backend: Run \"docker-compose up\" in project root' && echo 'Frontend: Already running with npm run dev' && next dev --turbopack",
+    "install:dev": "npm install",
+    "clean": "rm -rf .next node_modules package-lock.json && npm install"
   },
   "dependencies": {
     "next": "15.5.4",
