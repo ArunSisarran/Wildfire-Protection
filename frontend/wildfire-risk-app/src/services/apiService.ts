@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { FireRiskAssessment, FireRiskStation, FireLocation, PlumeData, Coordinates} from '../types';
+import { FireRiskAssessment, FireRiskStation, FireLocation, PlumeData, Coordinates, UserLocation, WildfireOverview, ActiveFire } from '../types';
 import { generateMockStation } from '../utils/helpers';
 
 import { API_BASE_URL, PLUME_API_BASE_URL, GEMINI_API_BASE_URL, API_ENDPOINTS, PLUME_ENDPOINTS, GEMINI_ENDPOINTS, NY_CONFIG } from '../utils/constants';
@@ -98,6 +98,47 @@ class FireRiskAPI {
     }
   }
 
+  async getWildfireOverview(userLocation: UserLocation, radiusKm: number = 500): Promise<WildfireOverview> {
+    try {
+      const response = await axios.post(this.buildUrl(this.baseURL, '/api/wildfire/overview'), {
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        radius_km: radiusKm,
+        confidence_threshold: 50,
+        max_fires: 100
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Wildfire overview error:', error);
+      return this.getMockWildfireOverview(userLocation, radiusKm);
+    }
+  }
+
+  async getSmokeRisk(userLocation: UserLocation, radiusKm: number = 500): Promise<any> {
+    try {
+      const response = await axios.post(this.buildUrl(this.baseURL, '/api/wildfire/smoke-risk'), {
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        radius_km: radiusKm,
+        confidence_threshold: 50,
+        max_fires: 50
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Smoke risk error:', error);
+      return {
+        user_location: userLocation,
+        radius_km: radiusKm,
+        fires_considered: 0,
+        smoke_threats: [],
+        risk_statement: "Unable to retrieve smoke risk data at this time.",
+        sources: ["Mock Data"],
+        cache_hit: false,
+        updated_at: new Date().toISOString()
+      };
+    }
+  }
+
   private normalizeBaseUrl(url?: string): string {
     if (!url) {
       return '';
@@ -178,6 +219,106 @@ class FireRiskAPI {
     return {
       type: 'Polygon',
       coordinates: [points]
+    };
+  }
+
+  private getMockWildfireOverview(userLocation: UserLocation, radiusKm: number): WildfireOverview {
+    const mockFires: ActiveFire[] = [
+      {
+        latitude: userLocation.latitude + 0.1,
+        longitude: userLocation.longitude + 0.1,
+        distance_km: 15.2,
+        acquired_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        collection: "VIIRS_SNPP_NRT",
+        frp: 42.5,
+        confidence: 85,
+        daynight: "D",
+        bright_ti4: 305.2,
+        bright_ti5: 289.1,
+        scan_km: 0.375,
+        track_km: 0.375,
+        estimated_area_m2: 140625,
+        plume_frames: [
+          {
+            hours: 1,
+            geojson: this.generateMockPlumePolygon({lat: userLocation.latitude + 0.1, lng: userLocation.longitude + 0.1}, 1),
+            meta: {
+              plume_length_m: 2000,
+              plume_width_m: 800,
+              emission_factor: 0.7,
+              wind_speed_m_s: 4.5,
+              wind_dir_from: 270
+            }
+          },
+          {
+            hours: 2,
+            geojson: this.generateMockPlumePolygon({lat: userLocation.latitude + 0.1, lng: userLocation.longitude + 0.1}, 2),
+            meta: {
+              plume_length_m: 4000,
+              plume_width_m: 1200,
+              emission_factor: 0.7,
+              wind_speed_m_s: 4.5,
+              wind_dir_from: 270
+            }
+          }
+        ]
+      },
+      {
+        latitude: userLocation.latitude - 0.05,
+        longitude: userLocation.longitude + 0.15,
+        distance_km: 8.7,
+        acquired_at: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+        collection: "VIIRS_SNPP_NRT",
+        frp: 28.3,
+        confidence: 72,
+        daynight: "D",
+        bright_ti4: 298.7,
+        bright_ti5: 285.4,
+        scan_km: 0.375,
+        track_km: 0.375,
+        estimated_area_m2: 140625,
+        plume_frames: [
+          {
+            hours: 1,
+            geojson: this.generateMockPlumePolygon({lat: userLocation.latitude - 0.05, lng: userLocation.longitude + 0.15}, 1),
+            meta: {
+              plume_length_m: 1500,
+              plume_width_m: 600,
+              emission_factor: 0.5,
+              wind_speed_m_s: 4.5,
+              wind_dir_from: 270
+            }
+          }
+        ]
+      }
+    ];
+
+    return {
+      updated_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+      cache_hit: false,
+      user_location: userLocation,
+      radius_km: radiusKm,
+      fires: mockFires,
+      station_context: {
+        station: { station_name: "Mock Station", latitude: userLocation.latitude, longitude: userLocation.longitude },
+        weather: { wind_speed: 10, wind_direction: 270, temperature: 78, relative_humidity: 35 },
+        nfdrs: { burning_index: 45, one_hr_tl_fuel_moisture: 8 },
+        distance_km: 5.2
+      },
+      summary: {
+        total_fires: mockFires.length,
+        radius_km: radiusKm,
+        maximum_risk_level: "HIGH",
+        risk_score: 68,
+        nearest_fire_km: 8.7,
+        smoke_eta_hours: 2.1,
+        smoke_direction: "NE",
+        prevailing_wind: "W",
+        warnings: ["High fire danger conditions present"]
+      },
+      chat_summary: `${mockFires.length} satellite fire detections within ${radiusKm} km. Highest local fire danger: HIGH (score 68.0). Nearest fire is 8.7 km away; smoke may reach the area from the NE in ~2.1 h. Prevailing winds blowing from W.`,
+      sources: ["NASA FIRMS (Mock)", "FEMS Weather Data (Mock)", "NFDRS Fire Danger Indices (Mock)"]
     };
   }
 }

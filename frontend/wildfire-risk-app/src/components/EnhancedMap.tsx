@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useContext } from 'react';
 import { FireRiskContext } from '../context/FireRiskContext';
-import { FireLocation, PlumeData } from '../types';
+import { FireLocation, PlumeData, ActiveFire } from '../types';
 import { NY_CONFIG, HEATMAP_GRADIENT, RISK_LEVELS } from '../utils/constants';
 import { useGoogleMaps } from '../hooks/useGoogleMaps';
 import apiService from '../services/apiService';
@@ -32,10 +32,21 @@ const EnhancedMap: React.FC<EnhancedMapProps> = ({
   const fireMarkersRef = useRef<any[]>([]);
   const plumeOverlaysRef = useRef<any[]>([]);
   
-  const { assessment, setSelectedStation } = useContext(FireRiskContext);
+  const { 
+    assessment, 
+    setSelectedStation, 
+    userLocation, 
+    wildfireOverview, 
+    loadingWildfire,
+    refreshWildfireData,
+    showActiveFires 
+  } = useContext(FireRiskContext);
   const { isLoaded, loadError } = useGoogleMaps();
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [plumes, setPlumes] = useState<Map<string, PlumeData>>(new Map());
+  const fireMarkersRealRef = useRef<any[]>([]);
+  const firePlumeOverlaysRef = useRef<any[]>([]);
+  const userMarkerRef = useRef<any>(null);
 
   const [stationPlume, setStationPlume] = useState<StationPlume | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -45,34 +56,77 @@ const EnhancedMap: React.FC<EnhancedMapProps> = ({
 
   // Initialize map
   useEffect(() => {
+    console.log('Map initialization effect', {
+      isLoaded,
+      hasMapRef: !!mapRef.current,
+      hasGoogleMapRef: !!googleMapRef.current,
+      hasGoogleMaps: !!window.google?.maps
+    });
+
     if (!isLoaded || !mapRef.current || googleMapRef.current || !window.google?.maps) return;
 
-    const map = new window.google.maps.Map(mapRef.current, {
-      center: NY_CONFIG.center,
-      zoom: NY_CONFIG.defaultZoom,
-      mapTypeControl: true, streetViewControl: false, fullscreenControl: true,
-      styles: [{ featureType: 'water', elementType: 'geometry', stylers: [{ color: '#1e40af' }] }]
-    });
+    try {
+      console.log('Creating Google Map instance');
+      const map = new window.google.maps.Map(mapRef.current, {
+        center: NY_CONFIG.center,
+        zoom: NY_CONFIG.defaultZoom,
+        mapTypeControl: true, 
+        streetViewControl: false, 
+        fullscreenControl: true,
+        styles: [{ featureType: 'water', elementType: 'geometry', stylers: [{ color: '#1e40af' }] }]
+      });
 
-    map.addListener('click', (event: any) => {
-      if (isDrawingMode) {
-        const fireLocation: FireLocation = {
-          id: uuidv4(),
-          coordinates: { lat: event.latLng.lat(), lng: event.latLng.lng() },
-          timestamp: new Date().toISOString(),
-          area_m2: 10000
-        };
-        onFireLocationAdd(fireLocation);
-        setIsDrawingMode(false);
-      }
-    });
-    googleMapRef.current = map;
+      map.addListener('click', (event: any) => {
+        if (isDrawingMode) {
+          const fireLocation: FireLocation = {
+            id: uuidv4(),
+            coordinates: { lat: event.latLng.lat(), lng: event.latLng.lng() },
+            timestamp: new Date().toISOString(),
+            area_m2: 10000
+          };
+          onFireLocationAdd(fireLocation);
+          setIsDrawingMode(false);
+        }
+      });
+      
+      googleMapRef.current = map;
+      console.log('Google Map created successfully', map);
+      
+      // Small delay to ensure map is fully initialized
+      setTimeout(() => {
+        console.log('Map initialization delay complete');
+      }, 100);
+    } catch (error) {
+      console.error('Error creating Google Map:', error);
+    }
   }, [isLoaded, isDrawingMode, onFireLocationAdd]);
 
   // Create markers and heatmap
   useEffect(() => {
-    if (!googleMapRef.current || !assessment?.assessments) return;
-    if (showHeatmap && !window.google?.maps?.visualization) return;
+    console.log('Creating markers and heatmap', {
+      hasMap: !!googleMapRef.current,
+      mapInstance: googleMapRef.current,
+      hasAssessment: !!assessment?.assessments,
+      assessmentCount: assessment?.assessments?.length,
+      showHeatmap,
+      hasVisualization: !!window.google?.maps?.visualization
+    });
+    
+    if (!googleMapRef.current || !assessment?.assessments) {
+      console.log('Skipping marker/heatmap creation - missing map or assessment data');
+      return;
+    }
+    
+    // Verify the map is actually a Google Maps instance
+    if (!(googleMapRef.current instanceof window.google.maps.Map)) {
+      console.error('googleMapRef.current is not a valid Google Maps instance:', googleMapRef.current);
+      return;
+    }
+    
+    if (showHeatmap && !window.google?.maps?.visualization) {
+      console.warn('Heatmap requested but visualization library not loaded');
+      return;
+    }
 
     markersRef.current.forEach(marker => marker.setMap(null));
     markersRef.current = [];
@@ -83,6 +137,7 @@ const EnhancedMap: React.FC<EnhancedMapProps> = ({
     }
 
     if (showHeatmap) {
+        console.log('Creating heatmap for', assessment.assessments.length, 'stations');
         const heatmapData = assessment.assessments
             .filter(station => station.latitude != null && station.longitude != null)
             .flatMap(station => {
@@ -106,11 +161,13 @@ const EnhancedMap: React.FC<EnhancedMapProps> = ({
                 return points;
             });
 
+        console.log('Created heatmap data points:', heatmapData.length);
         heatmapRef.current = new window.google.maps.visualization.HeatmapLayer({
             data: heatmapData, map: googleMapRef.current,
             radius: 100, opacity: 0.8, gradient: HEATMAP_GRADIENT,
             maxIntensity: 2.0, dissipating: false
         });
+        console.log('Heatmap layer created and added to map');
     }
 
     assessment.assessments.forEach((station: any) => {
@@ -240,6 +297,152 @@ const EnhancedMap: React.FC<EnhancedMapProps> = ({
     return cleanupAnimation;
   }, [isAnimating, stationPlume]);
 
+  // User location marker
+  useEffect(() => {
+    console.log('User location marker effect', {
+      hasMap: !!googleMapRef.current,
+      hasGoogleMaps: !!window.google?.maps,
+      userLocation
+    });
+
+    if (!googleMapRef.current || !window.google?.maps) return;
+    
+    // Verify the map is actually a Google Maps instance
+    if (!(googleMapRef.current instanceof window.google.maps.Map)) {
+      console.error('Cannot create user marker - invalid map instance');
+      return;
+    }
+
+    if (userMarkerRef.current) {
+      userMarkerRef.current.setMap(null);
+    }
+
+    userMarkerRef.current = new window.google.maps.Marker({
+      position: { lat: userLocation.latitude, lng: userLocation.longitude },
+      map: googleMapRef.current,
+      title: 'Your Location',
+      icon: {
+        path: window.google.maps.SymbolPath.CIRCLE,
+        scale: 12,
+        fillColor: '#4285f4',
+        fillOpacity: 1,
+        strokeColor: 'white',
+        strokeWeight: 3
+      },
+      zIndex: 1000
+    });
+
+    return () => {
+      if (userMarkerRef.current) {
+        userMarkerRef.current.setMap(null);
+      }
+    };
+  }, [userLocation, isLoaded]);
+
+  // Active fires and plumes
+  useEffect(() => {
+    if (!googleMapRef.current || !showActiveFires || !wildfireOverview?.fires) return;
+
+    // Clear existing fire markers and plumes
+    fireMarkersRealRef.current.forEach(marker => marker.setMap(null));
+    fireMarkersRealRef.current = [];
+    firePlumeOverlaysRef.current.forEach(overlay => overlay.setMap(null));
+    firePlumeOverlaysRef.current = [];
+
+    wildfireOverview.fires.forEach((fire: ActiveFire) => {
+      // Fire marker
+      const fireMarker = new window.google.maps.Marker({
+        position: { lat: fire.latitude, lng: fire.longitude },
+        map: googleMapRef.current,
+        title: `Active Fire - ${fire.distance_km}km away`,
+        icon: {
+          path: window.google.maps.SymbolPath.CIRCLE,
+          scale: Math.max(8, Math.min(20, (fire.frp || 10) / 5)),
+          fillColor: fire.confidence && fire.confidence > 80 ? '#ff4444' : '#ff8844',
+          fillOpacity: 0.8,
+          strokeColor: '#ffffff',
+          strokeWeight: 2
+        },
+        zIndex: 500
+      });
+
+      // Add info window for fire details
+      const infoWindow = new window.google.maps.InfoWindow({
+        content: `
+          <div class="p-3">
+            <h3 class="font-bold text-lg mb-2">Active Fire</h3>
+            <p><strong>Distance:</strong> ${fire.distance_km} km</p>
+            <p><strong>Confidence:</strong> ${fire.confidence || 'N/A'}%</p>
+            <p><strong>Fire Power:</strong> ${fire.frp?.toFixed(1) || 'N/A'} MW</p>
+            <p><strong>Acquired:</strong> ${fire.acquired_at ? new Date(fire.acquired_at).toLocaleString() : 'N/A'}</p>
+            <p><strong>Collection:</strong> ${fire.collection}</p>
+            ${fire.plume_frames.length > 0 ? `<p class="mt-2 text-blue-600"><strong>Plume frames:</strong> ${fire.plume_frames.length}</p>` : ''}
+          </div>
+        `
+      });
+
+      fireMarker.addListener('click', () => {
+        infoWindow.open(googleMapRef.current, fireMarker);
+      });
+
+      fireMarkersRealRef.current.push(fireMarker);
+
+      // Show plumes if available
+      if (showPlumes && fire.plume_frames.length > 0) {
+        fire.plume_frames.forEach((frame, index) => {
+          const coordinates = frame.geojson?.coordinates?.[0];
+          if (coordinates && coordinates.length > 0) {
+            const path = coordinates.map((coord: [number, number]) => ({
+              lat: coord[1],
+              lng: coord[0]
+            }));
+
+            const polygon = new window.google.maps.Polygon({
+              paths: path,
+              strokeColor: '#ff6600',
+              strokeOpacity: 0.6,
+              strokeWeight: 2,
+              fillColor: '#ff6600',
+              fillOpacity: Math.max(0.1, 0.4 - (index * 0.1)),
+              map: googleMapRef.current,
+              zIndex: 100 + index
+            });
+
+            // Add plume info window
+            const plumeInfoWindow = new window.google.maps.InfoWindow({
+              content: `
+                <div class="p-2">
+                  <h4 class="font-bold">Smoke Plume - ${frame.hours}h</h4>
+                  <p><strong>Length:</strong> ${(frame.meta.plume_length_m / 1000).toFixed(1)} km</p>
+                  <p><strong>Width:</strong> ${(frame.meta.plume_width_m / 1000).toFixed(1)} km</p>
+                  <p><strong>Wind Speed:</strong> ${frame.meta.wind_speed_m_s?.toFixed(1) || 'N/A'} m/s</p>
+                </div>
+              `
+            });
+
+            polygon.addListener('click', (event: any) => {
+              plumeInfoWindow.setPosition(event.latLng);
+              plumeInfoWindow.open(googleMapRef.current);
+            });
+
+            firePlumeOverlaysRef.current.push(polygon);
+          }
+        });
+      }
+    });
+
+    return () => {
+      fireMarkersRealRef.current.forEach(marker => marker.setMap(null));
+      firePlumeOverlaysRef.current.forEach(overlay => overlay.setMap(null));
+    };
+  }, [wildfireOverview, showActiveFires, showPlumes, isLoaded]);
+
+  // Refresh wildfire data when user location changes
+  useEffect(() => {
+    if (isLoaded) {
+      refreshWildfireData();
+    }
+  }, [userLocation, isLoaded]);
 
   if (loadError) return <div className="flex items-center justify-center h-full"><p>Failed to load map.</p></div>;
   if (!isLoaded) return <div className="flex items-center justify-center h-full"><div className="animate-spin rounded-full h-12 w-12 border-b-2"></div></div>;

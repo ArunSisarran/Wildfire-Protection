@@ -1,8 +1,8 @@
 import { NYBounds, Coordinates, RiskLevel } from '../types';
 
-export const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://your-api.vercel.app';
-export const PLUME_API_BASE_URL = process.env.REACT_APP_PLUME_API || 'https://your-plume-api.vercel.app';
-export const GEMINI_API_BASE_URL = process.env.REACT_APP_GEMINI_API || 'https://your-gemini-api.vercel.app';
+export const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000';
+export const PLUME_API_BASE_URL = process.env.REACT_APP_PLUME_API || 'http://127.0.0.1:8000';
+export const GEMINI_API_BASE_URL = process.env.REACT_APP_GEMINI_API || 'http://127.0.0.1:8000';
 export const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || '';
 
 export const NY_CONFIG = {
@@ -48,6 +48,11 @@ export const PLUME_ENDPOINTS = {
 
 export const GEMINI_ENDPOINTS = {
   chat: '/api/llm/chat'
+};
+
+export const WILDFIRE_ENDPOINTS = {
+  overview: '/api/wildfire/overview',
+  smokeRisk: '/api/wildfire/smoke-risk'
 };
 
 export const UPDATE_INTERVAL = 600000; // 1 minute

@@ -1,6 +1,7 @@
 import React, { createContext, useState, ReactNode } from 'react';
-import { FireRiskAssessment, FireRiskStation, FireLocation } from '../types';
+import { FireRiskAssessment, FireRiskStation, FireLocation, UserLocation, WildfireOverview } from '../types';
 import { useFireRiskData } from '../hooks/useFireRiskData';
+import { NY_CONFIG } from '../utils/constants';
 
 interface FireRiskContextType {
   assessment: FireRiskAssessment | null;
@@ -12,6 +13,13 @@ interface FireRiskContextType {
   fireLocations: FireLocation[];
   addFireLocation: (location: FireLocation) => void;
   clearFireLocations: () => void;
+  userLocation: UserLocation;
+  setUserLocation: (location: UserLocation) => void;
+  wildfireOverview: WildfireOverview | null;
+  loadingWildfire: boolean;
+  refreshWildfireData: () => void;
+  showActiveFires: boolean;
+  setShowActiveFires: (show: boolean) => void;
 }
 
 export const FireRiskContext = createContext<FireRiskContextType>({
@@ -23,7 +31,14 @@ export const FireRiskContext = createContext<FireRiskContextType>({
   setSelectedStation: () => {},
   fireLocations: [],
   addFireLocation: () => {},
-  clearFireLocations: () => {}
+  clearFireLocations: () => {},
+  userLocation: { latitude: NY_CONFIG.center.lat, longitude: NY_CONFIG.center.lng },
+  setUserLocation: () => {},
+  wildfireOverview: null,
+  loadingWildfire: false,
+  refreshWildfireData: () => {},
+  showActiveFires: true,
+  setShowActiveFires: () => {}
 });
 
 interface FireRiskProviderProps {
@@ -34,6 +49,13 @@ export const FireRiskProvider: React.FC<FireRiskProviderProps> = ({ children }) 
   const { assessment, loading, error, refreshData } = useFireRiskData();
   const [selectedStation, setSelectedStation] = useState<FireRiskStation | null>(null);
   const [fireLocations, setFireLocations] = useState<FireLocation[]>([]);
+  const [userLocation, setUserLocation] = useState<UserLocation>({ 
+    latitude: NY_CONFIG.center.lat, 
+    longitude: NY_CONFIG.center.lng 
+  });
+  const [wildfireOverview, setWildfireOverview] = useState<WildfireOverview | null>(null);
+  const [loadingWildfire, setLoadingWildfire] = useState(false);
+  const [showActiveFires, setShowActiveFires] = useState(true);
 
   const addFireLocation = (location: FireLocation) => {
     setFireLocations(prev => [...prev, location]);
@@ -41,6 +63,19 @@ export const FireRiskProvider: React.FC<FireRiskProviderProps> = ({ children }) 
 
   const clearFireLocations = () => {
     setFireLocations([]);
+  };
+
+  const refreshWildfireData = async () => {
+    setLoadingWildfire(true);
+    try {
+      const apiService = (await import('../services/apiService')).default;
+      const data = await apiService.getWildfireOverview(userLocation, 500);
+      setWildfireOverview(data);
+    } catch (error) {
+      console.error('Failed to refresh wildfire data:', error);
+    } finally {
+      setLoadingWildfire(false);
+    }
   };
 
   return (
@@ -54,7 +89,14 @@ export const FireRiskProvider: React.FC<FireRiskProviderProps> = ({ children }) 
         setSelectedStation,
         fireLocations,
         addFireLocation,
-        clearFireLocations
+        clearFireLocations,
+        userLocation,
+        setUserLocation,
+        wildfireOverview,
+        loadingWildfire,
+        refreshWildfireData,
+        showActiveFires,
+        setShowActiveFires
       }}
     >
       {children}

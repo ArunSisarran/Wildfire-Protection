@@ -90,3 +90,56 @@ export interface RiskLevel {
   range: [number, number];
   label: string;
 }
+
+export interface UserLocation {
+  latitude: number;
+  longitude: number;
+}
+
+export interface ActiveFire {
+  latitude: number;
+  longitude: number;
+  distance_km: number;
+  acquired_at?: string;
+  collection: string;
+  frp?: number;
+  confidence?: number;
+  daynight?: string;
+  bright_ti4?: number;
+  bright_ti5?: number;
+  scan_km: number;
+  track_km: number;
+  estimated_area_m2: number;
+  station_used?: any;
+  plume_frames: PlumeFrame[];
+  plume_error?: string;
+}
+
+export interface WildfireOverview {
+  updated_at: string;
+  expires_at: string;
+  cache_hit: boolean;
+  user_location: UserLocation;
+  radius_km: number;
+  fires: ActiveFire[];
+  station_context: {
+    station: any;
+    weather: any;
+    nfdrs: any;
+    distance_km?: number;
+  };
+  summary: {
+    total_fires: number;
+    radius_km: number;
+    maximum_risk_level?: string;
+    risk_score?: number;
+    nearest_fire_km?: number;
+    smoke_eta_hours?: number;
+    smoke_direction?: string;
+    prevailing_wind?: string;
+    warnings: string[];
+  };
+  chat_summary: string;
+  sources: string[];
+  merged_plume?: any;
+}

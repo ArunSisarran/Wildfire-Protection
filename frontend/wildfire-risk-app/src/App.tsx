@@ -7,9 +7,20 @@ import ControlPanel from './components/ControlPanel';
 import FireRiskLegend from './components/FireRiskLegend';
 import ChatPanel from './components/ChatPanel';
 import MissionPopup from './components/MissionPopup';
+import SimpleLocationInput from './components/SimpleLocationInput';
+import DebugPanel from './components/DebugPanel';
 
 const AppContent: React.FC = () => {
-  const { fireLocations, addFireLocation, clearFireLocations } = useContext(FireRiskContext);
+  const { 
+    fireLocations, 
+    addFireLocation, 
+    clearFireLocations,
+    userLocation,
+    setUserLocation,
+    wildfireOverview,
+    showActiveFires,
+    setShowActiveFires
+  } = useContext(FireRiskContext);
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [showPlumes, setShowPlumes] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -38,7 +49,17 @@ const AppContent: React.FC = () => {
         onOpenChat={() => setIsChatOpen(true)}
         onClearFires={clearFireLocations}
         fireCount={fireLocations.length}
+        showActiveFires={showActiveFires}
+        setShowActiveFires={setShowActiveFires}
+        activeFireCount={wildfireOverview?.fires?.length || 0}
       />
+      
+      <SimpleLocationInput
+        userLocation={userLocation}
+        onLocationChange={setUserLocation}
+        className="absolute bottom-20 right-5 max-w-sm z-10"
+      />
+      <DebugPanel />
       <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
       <MissionPopup isOpen={isMissionOpen} onClose={() => setIsMissionOpen(false)} />
     </div>

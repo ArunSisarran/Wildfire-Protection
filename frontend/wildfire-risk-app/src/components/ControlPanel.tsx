@@ -1,7 +1,8 @@
 import React from 'react';
 
 // You might need to install a library like react-icons: npm install react-icons
-import { FiCloud, FiMessageSquare, FiTrash2, FiThermometer } from 'react-icons/fi'; 
+import { FiCloud, FiMessageSquare, FiTrash2, FiThermometer } from 'react-icons/fi';
+import { FaFire } from 'react-icons/fa'; 
 
 interface ControlPanelProps {
   showHeatmap: boolean;
@@ -11,12 +12,16 @@ interface ControlPanelProps {
   onOpenChat: () => void;
   onClearFires: () => void;
   fireCount: number;
+  showActiveFires: boolean;
+  setShowActiveFires: (show: boolean) => void;
+  activeFireCount: number;
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({
   showHeatmap, setShowHeatmap,
   showPlumes, setShowPlumes,
-  onOpenChat, onClearFires, fireCount
+  onOpenChat, onClearFires, fireCount,
+  showActiveFires, setShowActiveFires, activeFireCount
 }) => {
   return (
     <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-gray-900/80 backdrop-blur-lg rounded-full shadow-2xl p-2 z-20">
@@ -33,6 +38,13 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         isActive={showPlumes}
         onClick={() => setShowPlumes(!showPlumes)}
         activeColor="bg-blue-500"
+      />
+      <ControlButton
+        label={`Active Fires ${activeFireCount > 0 ? `(${activeFireCount})` : ''}`}
+        icon={<FaFire size={20} />}
+        isActive={showActiveFires}
+        onClick={() => setShowActiveFires(!showActiveFires)}
+        activeColor="bg-red-500"
       />
       
       {fireCount > 0 && (
