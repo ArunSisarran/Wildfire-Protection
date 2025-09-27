@@ -3,7 +3,11 @@ import { FireRiskContext } from '../context/FireRiskContext';
 import { getRiskLevelInfo, formatTimestamp } from '../utils/helpers';
 import LoadingSpinner from './LoadingSpinner';
 
-// Helper function to convert degrees to a cardinal direction
+// --- FIX 1: Define an interface for the props the component will receive ---
+interface SidebarProps {
+  onShowMission: () => void;
+}
+
 const getWindDirectionCardinal = (degrees: number | null | undefined): string => {
   if (degrees == null) return 'N/A';
   const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
@@ -11,7 +15,8 @@ const getWindDirectionCardinal = (degrees: number | null | undefined): string =>
   return directions[index];
 };
 
-const Sidebar: React.FC = () => {
+// --- FIX 2: Update the component to accept the 'onShowMission' prop ---
+const Sidebar: React.FC<SidebarProps> = ({ onShowMission }) => {
   const { assessment, loading, error, refreshData, selectedStation, setSelectedStation } = useContext(FireRiskContext);
 
   const renderSummary = () => {
@@ -29,13 +34,11 @@ const Sidebar: React.FC = () => {
           </button>
         </div>
         
-        {/* Average Risk Section */}
         <div className="p-4 rounded-lg bg-black/20 mb-4">
             <span className="text-sm font-medium text-white/80">Average Risk</span>
             <div className="text-3xl font-bold">{assessment.summary.average_risk.toFixed(1)}%</div>
         </div>
 
-        {/* Key Stats */}
         <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="p-3 rounded-lg bg-black/20">
               <p className="text-xs font-medium text-white/70">Total Stations</p>
@@ -47,7 +50,6 @@ const Sidebar: React.FC = () => {
             </div>
         </div>
 
-        {/* Highest Risk Station */}
         {assessment.summary.highest_risk && (
             <div className="p-3 rounded-lg bg-red-900/50">
               <p className="text-xs font-medium text-red-200">Highest Risk Station</p>
@@ -83,7 +85,6 @@ const Sidebar: React.FC = () => {
           </div>
         </div>
 
-        {/* Weather & Fire Indices */}
         <div className="space-y-3 text-sm">
           <div>
             <h4 className="font-semibold mb-1 text-white/90">Current Weather</h4>
@@ -106,8 +107,21 @@ const Sidebar: React.FC = () => {
   };
 
   return (
-    <aside className="absolute top-0 left-0 h-full w-[400px] bg-gray-900/80 backdrop-blur-lg text-white p-6 z-20 overflow-y-auto">
-      {selectedStation ? renderStationDetails() : renderSummary()}
+    <aside className="absolute top-0 left-0 h-full w-[400px] bg-gray-900/80 backdrop-blur-lg text-white p-6 z-20 flex flex-col">
+      <div className="flex-shrink-0">
+        {selectedStation ? renderStationDetails() : renderSummary()}
+      </div>
+      
+      <div className="flex-grow" />
+
+      <div className="flex-shrink-0 pt-4">
+        <button
+          onClick={onShowMission}
+          className="w-full bg-white/10 text-white/80 font-semibold px-4 py-3 rounded-lg hover:bg-white/20 transition"
+        >
+          Our Mission
+        </button>
+      </div>
     </aside>
   );
 };

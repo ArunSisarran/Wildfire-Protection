@@ -13,12 +13,14 @@ const AppContent: React.FC = () => {
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [showPlumes, setShowPlumes] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [isMissionOpen, setIsMissionOpen] = useState(true); // Open by default on first visit
+  const [isMissionOpen, setIsMissionOpen] = useState(true);
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-gray-800">
-      <Header onShowMission={() => setIsMissionOpen(true)} />
-      <Sidebar />
+      <Header />
+      
+      <Sidebar onShowMission={() => setIsMissionOpen(true)} />
+      
       <main className="w-full h-full">
         <EnhancedMap
           showHeatmap={showHeatmap}
