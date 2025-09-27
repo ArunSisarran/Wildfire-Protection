@@ -8,6 +8,7 @@ import os
 
 from fems_endpoints import FEMSFireRiskAPI
 from llm_endpoint import router as llm_router
+from plume_endpoint import router as plume_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ app.add_middleware(
 
 # Include LLM router
 app.include_router(llm_router)
+app.include_router(plume_router)
 
 fems_api = FEMSFireRiskAPI()
 
@@ -89,9 +91,6 @@ class FireRiskAssessment(BaseModel):
 
 class GraphQLQuery(BaseModel):
     query: str = Field(..., description="GraphQL query string")
-
-# Get frontend URL from environment or use default
-#frontend_url = os.getenv("FRONTEND_URL", "https://frontend-l4dndu693-zhuolin-lis-projects.vercel.app")
 
 
 @app.get("/")
