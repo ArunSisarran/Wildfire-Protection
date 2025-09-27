@@ -1,46 +1,24 @@
 'use client';
 
 import { useState } from 'react';
-import { apiClient } from '@/lib/api';
+import Link from 'next/link';
 import ChatPanel from '@/components/ChatModal';
+import RespiraLogo from '@/components/RespiraLogo';
 
 export default function Home() {
-  const [apiStatus, setApiStatus] = useState<string>('');
-  const [apiMessage, setApiMessage] = useState<string>('');
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
-
-  const testApiConnection = async () => {
-    setApiStatus('Testing...');
-    try {
-      const healthResponse = await apiClient.health();
-      if (healthResponse.data) {
-        setApiStatus('✅ Backend connected');
-        const helloResponse = await apiClient.hello('Wildfire Protection');
-        if (helloResponse.data) {
-          setApiMessage(helloResponse.data.message);
-        }
-      } else {
-        setApiStatus('❌ Backend connection failed');
-        setApiMessage(healthResponse.error || 'Unknown error');
-      }
-    } catch {
-      setApiStatus('❌ Network error');
-      setApiMessage('Cannot reach backend API');
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white text-gray-900">
       <header className="border-b border-orange-200/60 bg-white/70 backdrop-blur">
         <div className="mx-auto max-w-6xl px-6 py-5 flex items-center justify-between">
-          <h1 className="text-xl font-bold tracking-tight">
-            Wildfire Protection
-          </h1>
-          <nav className="hidden sm:flex gap-6 text-sm font-medium">
-            <a className="hover:text-orange-600" href="#problem">Problem</a>
-            <a className="hover:text-orange-600" href="#audience">Audience</a>
-            <a className="hover:text-orange-600" href="#features">Core features</a>
-          </nav>
+          <RespiraLogo size="md" />
+          <Link
+            href="/map"
+            className="inline-flex items-center justify-center rounded-md bg-orange-600 px-4 py-2 text-white font-semibold shadow-sm hover:bg-orange-700"
+          >
+            Try now
+          </Link>
         </div>
       </header>
 
@@ -64,41 +42,44 @@ export default function Home() {
                 >
                   🔥 Chat with Fire Risk Assistant
                 </button>
-                <a
-                  href="#features"
+                <Link
+                  href="/map"
                   className="inline-flex items-center justify-center rounded-md border border-orange-200 px-5 py-3 font-semibold text-orange-700 bg-white hover:bg-orange-50"
                 >
                   Explore features
-                </a>
+                </Link>
               </div>
             </div>
             <div className="rounded-xl border border-orange-200 bg-white p-6 shadow-sm">
-              <div className="rounded-lg h-60 bg-gradient-to-br from-orange-100 to-orange-200 flex items-center justify-center text-orange-800 font-semibold">
-                Real-time smoke and AQI insights
+              {/* Forest/Haze/Smoke Image */}
+              <div className="relative h-60 rounded-lg overflow-hidden">
+                {/* Forest Background */}
+                <div className="absolute inset-0 bg-gradient-to-br from-green-600 via-green-500 to-green-400">
+                  {/* Haze/Smoke Overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-gray-600/40 via-transparent to-gray-400/20"></div>
+                  <div className="absolute inset-0 bg-gradient-to-r from-orange-300/50 via-transparent to-orange-500/40"></div>
+                  
+                  {/* Smoke Effect */}
+                  <div className="absolute inset-0 opacity-40">
+                    <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-white/30 rounded-full blur-xl"></div>
+                    <div className="absolute top-1/3 right-1/3 w-24 h-24 bg-orange-200/40 rounded-full blur-lg"></div>
+                    <div className="absolute bottom-1/3 left-1/3 w-40 h-40 bg-gray-300/30 rounded-full blur-2xl"></div>
+                    <div className="absolute bottom-1/4 right-1/4 w-28 h-28 bg-orange-300/35 rounded-full blur-xl"></div>
+                  </div>
+                  
+                  {/* Overlay Text */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center text-white">
+                      <div className="text-4xl mb-2">🌲</div>
+                      <h3 className="text-lg font-bold drop-shadow-lg">Forest Fire Risk</h3>
+                      <p className="text-sm opacity-90 drop-shadow-md">Real-time monitoring</p>
+                    </div>
+                  </div>
+                </div>
               </div>
               <p className="text-sm text-gray-600 mt-3">
-                Concept preview. Future version will visualize wind-driven smoke
-                plumes, affected radius, and AQI forecasts by region.
+                Visual representation of forest areas with smoke and haze effects, showing the environmental impact of wildfires.
               </p>
-              
-              {/* API Test Section */}
-              <div className="mt-4 pt-4 border-t border-orange-200">
-                <h4 className="font-semibold text-sm mb-2">Backend Connection Test</h4>
-                <button
-                  onClick={testApiConnection}
-                  className="text-xs bg-orange-600 text-white px-3 py-1 rounded hover:bg-orange-700"
-                >
-                  Test API
-                </button>
-                {apiStatus && (
-                  <div className="mt-2">
-                    <p className="text-xs font-medium">{apiStatus}</p>
-                    {apiMessage && (
-                      <p className="text-xs text-gray-600">{apiMessage}</p>
-                    )}
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         </section>
@@ -169,8 +150,11 @@ export default function Home() {
       </main>
 
       <footer className="mt-10 border-t border-orange-200/60 bg-white/60">
-        <div className="mx-auto max-w-6xl px-6 py-6 text-sm text-gray-600">
-          © {new Date().getFullYear()} Wildfire Protection
+        <div className="mx-auto max-w-6xl px-6 py-6 flex items-center justify-between">
+          <RespiraLogo size="sm" />
+          <div className="text-sm text-gray-600">
+            © {new Date().getFullYear()} Respira
+          </div>
         </div>
       </footer>
 
