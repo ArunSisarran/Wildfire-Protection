@@ -111,11 +111,14 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose }) => {
                   }`}
                 >
                   <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  
+                  {/* --- THIS BLOCK WAS REMOVED ---
                   {message.fire_risk_data && (
                     <div className="mt-2 p-2 bg-white/20 rounded text-xs">
                       <p>Risk: {message.fire_risk_data.risk_level}</p>
                     </div>
                   )}
+                  */}
                 </div>
               </div>
             ))}
