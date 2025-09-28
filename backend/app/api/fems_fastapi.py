@@ -239,7 +239,6 @@ async def get_fire_risk_assessment(
 ):
     """
     Get comprehensive fire risk assessment for specified stations or top NY stations
-    
     Combines weather data, NFDRS data, and risk calculations for each station
     """
     try:
@@ -247,7 +246,6 @@ async def get_fire_risk_assessment(
             logger.info(f"No station IDs provided, fetching top {limit} active NY stations")
             stations_response = fems_api.get_ny_stations()
             stations = stations_response['data']['stationMetaData']['data']
-            
             active_stations = [s for s in stations if s.get('station_status') == 'A'][:limit]
             station_ids = ','.join(str(s['station_id']) for s in active_stations)
         else:
@@ -255,45 +253,43 @@ async def get_fire_risk_assessment(
             all_stations = stations_response['data']['stationMetaData']['data']
             requested_ids = [int(sid.strip()) for sid in station_ids.split(',')]
             active_stations = [s for s in all_stations if s['station_id'] in requested_ids]
-        
+
         if not active_stations:
             return {
                 "message": "No active stations found",
                 "assessments": []
             }
-        
+
         logger.info(f"Assessing fire risk for stations: {station_ids}")
-        
+
         weather_response = fems_api.get_weather_observations(station_ids, hours_back=24)
         weather_data = weather_response['data']['weatherObs']['data']
-        
+
         nfdrs_response = fems_api.get_nfdrs_observations(station_ids, days_back=7)
         nfdrs_data = nfdrs_response['data']['nfdrsObs']['data']
-        
+
         assessments = []
         for station in active_stations:
             station_id = station['station_id']
-            
             station_weather = next((w for w in weather_data if w['station_id'] == station_id), {})
             station_nfdrs = next((n for n in nfdrs_data if n['station_id'] == station_id), {})
-            
-            if not station_nfdrs:
-                logger.warning(f"No NFDRS data found for station {station_id}")
-                continue
-            
-            risk_score = fems_api.calculate_fire_risk_score(station_nfdrs, station_weather)
-            
-            if risk_score < 20:
-                risk_level = "LOW"
-            elif risk_score < 40:
-                risk_level = "MODERATE"
-            elif risk_score < 60:
-                risk_level = "HIGH"
-            elif risk_score < 80:
-                risk_level = "VERY HIGH"
+
+            if station_nfdrs:
+                risk_score = fems_api.calculate_fire_risk_score(station_nfdrs, station_weather)
+                if risk_score < 20:
+                    risk_level = "LOW"
+                elif risk_score < 40:
+                    risk_level = "MODERATE"
+                elif risk_score < 60:
+                    risk_level = "HIGH"
+                elif risk_score < 80:
+                    risk_level = "VERY HIGH"
+                else:
+                    risk_level = "EXTREME"
             else:
-                risk_level = "EXTREME"
-            
+                risk_score = None
+                risk_level = None
+
             assessments.append({
                 "station_id": station_id,
                 "station_name": station['station_name'],
@@ -301,21 +297,20 @@ async def get_fire_risk_assessment(
                 "longitude": station['longitude'],
                 "risk_score": risk_score,
                 "risk_level": risk_level,
-                "weather_conditions": station_weather,
-                "fire_indices": station_nfdrs
+                "weather_conditions": station_weather if station_weather else None,
+                "fire_indices": station_nfdrs if station_nfdrs else None
             })
-        
-        assessments.sort(key=lambda x: x['risk_score'], reverse=True)
-        
-        high_risk = [a for a in assessments if a['risk_score'] >= 40]
-        
+
+        assessments.sort(key=lambda x: (x['risk_score'] if x['risk_score'] is not None else -1), reverse=True)
+        high_risk = [a for a in assessments if a['risk_score'] is not None and a['risk_score'] >= 40]
+
         return {
             "assessment_time": datetime.utcnow().isoformat(),
             "total_stations": len(assessments),
             "high_risk_count": len(high_risk),
             "summary": {
                 "highest_risk": assessments[0] if assessments else None,
-                "average_risk": sum(a['risk_score'] for a in assessments) / len(assessments) if assessments else 0
+                "average_risk": sum(a['risk_score'] for a in assessments if a['risk_score'] is not None) / max(1, len([a for a in assessments if a['risk_score'] is not None])) if assessments else 0
             },
             "assessments": assessments
         }
@@ -421,6 +416,8 @@ async def health_check():
             "timestamp": datetime.utcnow().isoformat()
         }
 
+<<<<<<< HEAD
+=======
 @app.get("/test-llm")
 async def test_llm_simple():
     """Simple test endpoint for LLM functionality"""
@@ -435,6 +432,7 @@ async def test_llm_simple():
             "timestamp": datetime.utcnow().isoformat()
         }
 
+>>>>>>> upstream/main
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
